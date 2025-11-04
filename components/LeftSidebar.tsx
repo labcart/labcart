@@ -18,9 +18,9 @@ export default function LeftSidebar() {
   };
 
   return (
-    <div className="w-[250px] flex-shrink-0 border-r flex flex-col" style={{ backgroundColor: 'var(--sidebar-bg)', borderColor: 'var(--border)' }}>
+    <div className="w-[250px] h-full flex-shrink-0 border-r flex flex-col" style={{ backgroundColor: 'var(--sidebar-bg)', borderColor: 'var(--border)' }}>
       {/* Icon Menu Bar - Above everything */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-center justify-center gap-1 px-3 py-2 border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
         <button
           onClick={() => {/* TODO: Navigate to home page */}}
           className="w-8 h-8 flex items-center justify-center rounded hover:bg-black/5 cursor-pointer"

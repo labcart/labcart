@@ -7,6 +7,7 @@ interface BotMessage {
   botId: string;
   userId: number;
   message: string;
+  sessionUuid?: string;  // Session UUID from backend
   hasAudio: boolean;
   hasImages: boolean;
   audioPath?: string;
