@@ -35,7 +35,9 @@ export interface Session {
   reason?: string;
 }
 
+// Chat Tab (for bot conversations)
 export interface ChatTab {
+  type: 'chat';
   id: string; // Unique tab ID: `${botId}-${sessionUuid}`
   botId: string;
   botName: string;
@@ -44,6 +46,18 @@ export interface ChatTab {
   isLoading: boolean;
   lastActivity: number;
 }
+
+// File Tab (for code editing)
+export interface FileTab {
+  type: 'file';
+  id: string; // Unique tab ID: `file-${filePath}`
+  filePath: string;
+  fileName: string;
+  lastActivity: number;
+}
+
+// Unified Tab Type (discriminated union)
+export type Tab = ChatTab | FileTab;
 
 // ============================================================================
 // API Request/Response Types
@@ -102,11 +116,13 @@ export interface BotMessageEvent {
 
 export interface TabStore {
   // State
-  tabs: ChatTab[];
+  tabs: Tab[];
   activeTabId: string | null;
   userId: number | null;
+  hasInitialized: boolean;
+  workspacePath: string | null;
 
-  // Actions
+  // Chat Tab Actions
   addTab: (botId: string, botName: string, sessionUuid?: string) => void;
   removeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
@@ -115,9 +131,17 @@ export interface TabStore {
   setTabLoading: (tabId: string, isLoading: boolean) => void;
   setTabSessionUuid: (tabId: string, sessionUuid: string) => void;
   replaceTabSession: (botId: string, botName: string, sessionUuid: string | null, messages?: Message[]) => void;
+
+  // File Tab Actions
+  addFileTab: (filePath: string) => void;
+
+  // Common Actions
   setUserId: (userId: number) => void;
-  getActiveTab: () => ChatTab | null;
+  getActiveTab: () => Tab | null;
   validateTabs: () => Promise<void>;
+  initializeDefaultTab: () => void;
+  clearWorkspaceData: () => void;
+  setWorkspacePath: (path: string) => void;
 }
 
 // ============================================================================

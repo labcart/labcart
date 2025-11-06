@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LabCart IDE
 
-## Getting Started
+**An AI-native IDE where multiple AI agents with distinct personalities collaborate on YOUR codebase.**
 
-First, run the development server:
+LabCart is like VS Code meets Cursor meets Conductor.build - a desktop IDE where bots (Finn, Matty, Rick, Claude) work together on your actual project files, with real terminals and file system access.
 
+## What is LabCart?
+
+LabCart is NOT:
+- ❌ A chat-only web application
+- ❌ A sandbox where bots play with toy examples
+- ❌ An API-key-based SaaS service
+
+LabCart IS:
+- ✅ A downloadable desktop IDE (macOS app)
+- ✅ Multi-bot collaboration on YOUR real codebase
+- ✅ Persistent context - bots remember their work
+- ✅ Real terminal integration - execute commands
+- ✅ Real file system access - read/write your files
+- ✅ Uses YOUR Claude subscription (not ours)
+
+## Current Status
+
+**MVP Chat Interface:** ✅ Complete (60%)
+- Multi-bot chat interface with tabs
+- Bot personality system (loaded from Supabase)
+- Session persistence (local JSON files)
+- GitHub OAuth authentication
+- Real-time messaging via Socket.io
+
+**Next Priority:** 🚧 Terminal & File System
+- Real terminal integration (pty process)
+- File system access for bots
+- User workspace configuration
+- User's Claude CLI integration
+
+## Development Setup
+
+### Prerequisites
+- Node.js 18+
+- Claude CLI installed and authenticated
+- Supabase account (for bot personalities)
+
+### Running Locally
+
+1. **Install dependencies:**
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. **Set up environment variables:**
+```bash
+# Create .env.local with:
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. **Run the dev server:**
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. **Run the bot backend (in separate terminal):**
+```bash
+cd ../claude-bot
+node server.js
+```
 
-## Learn More
+5. **Open IDE:**
+Open [http://localhost:3000](http://localhost:3000)
 
-To learn more about Next.js, take a look at the following resources:
+## Project Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+labcart/
+├── app/                    # Next.js App Router
+│   └── page.tsx           # Main IDE layout
+├── components/
+│   ├── ChatWindow.tsx     # Multi-tab chat interface
+│   ├── LeftSidebar.tsx    # File explorer (TODO: real files)
+│   └── RightSidebar.tsx   # Team, Plans, Tasks, Terminal
+├── contexts/
+│   └── BotContext.tsx     # Bot state management
+├── hooks/
+│   └── useSocket.ts       # Socket.io connection
+├── services/
+│   └── api.ts             # HTTP API client
+└── store/
+    └── tabStore.ts        # Zustand state management
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Architecture
 
-## Deploy on Vercel
+See [ARCHITECTURE.md](../ARCHITECTURE.md) for detailed technical architecture, design decisions, and roadmap.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tech Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Next.js 16** (App Router, Turbopack)
+- **React 19 + TypeScript**
+- **Tailwind CSS**
+- **Socket.io** (real-time communication)
+- **Zustand** (state management)
+- **Supabase** (auth + bot personalities)
+
+## Contributing
+
+This is currently a private project in active development. See the main [ARCHITECTURE.md](../ARCHITECTURE.md) for the full vision and roadmap.
+
+---
+
+**Last Updated:** 2025-11-04
+**Status:** MVP chat complete, building real IDE features next

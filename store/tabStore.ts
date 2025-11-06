@@ -7,7 +7,7 @@
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import type { TabStore, ChatTab, Message } from '@/types';
+import type { TabStore, ChatTab, FileTab, Tab, Message } from '@/types';
 
 const useTabStore = create<TabStore>()(
   devtools(
@@ -20,6 +20,8 @@ const useTabStore = create<TabStore>()(
       tabs: [],
       activeTabId: null,
       userId: null,
+      hasInitialized: false, // Track if we've done first-time initialization
+      workspacePath: null, // Track which workspace this state belongs to
 
       // ========================================================================
       // Actions
@@ -43,6 +45,7 @@ const useTabStore = create<TabStore>()(
         }
 
         const newTab: ChatTab = {
+          type: 'chat',
           id: tabId,
           botId,
           botName,
@@ -93,12 +96,12 @@ const useTabStore = create<TabStore>()(
       },
 
       /**
-       * Replace all messages in a tab (for loading from backend)
+       * Replace all messages in a chat tab (for loading from backend)
        */
       updateTabMessages: (tabId: string, messages: Message[]) => {
         set((state) => ({
           tabs: state.tabs.map((tab) =>
-            tab.id === tabId
+            tab.id === tabId && tab.type === 'chat'
               ? { ...tab, messages, lastActivity: Date.now() }
               : tab
           ),
@@ -106,12 +109,12 @@ const useTabStore = create<TabStore>()(
       },
 
       /**
-       * Add a single message to a tab (for real-time updates)
+       * Add a single message to a chat tab (for real-time updates)
        */
       addMessageToTab: (tabId: string, message: Message) => {
         set((state) => ({
           tabs: state.tabs.map((tab) =>
-            tab.id === tabId
+            tab.id === tabId && tab.type === 'chat'
               ? {
                   ...tab,
                   messages: [...tab.messages, message],
@@ -123,23 +126,23 @@ const useTabStore = create<TabStore>()(
       },
 
       /**
-       * Set tab loading state
+       * Set chat tab loading state
        */
       setTabLoading: (tabId: string, isLoading: boolean) => {
         set((state) => ({
           tabs: state.tabs.map((tab) =>
-            tab.id === tabId ? { ...tab, isLoading } : tab
+            tab.id === tabId && tab.type === 'chat' ? { ...tab, isLoading } : tab
           ),
         }));
       },
 
       /**
-       * Update tab's session UUID (when backend creates session)
+       * Update chat tab's session UUID (when backend creates session)
        */
       setTabSessionUuid: (tabId: string, sessionUuid: string) => {
         set((state) => ({
           tabs: state.tabs.map((tab) =>
-            tab.id === tabId ? { ...tab, sessionUuid } : tab
+            tab.id === tabId && tab.type === 'chat' ? { ...tab, sessionUuid } : tab
           ),
         }));
       },
@@ -151,8 +154,8 @@ const useTabStore = create<TabStore>()(
        */
       replaceTabSession: (botId: string, botName: string, sessionUuid: string | null, messages: Message[] = []) => {
         set((state) => {
-          // Find existing tab for this bot
-          const existingTab = state.tabs.find((t) => t.botId === botId);
+          // Find existing chat tab for this bot
+          const existingTab = state.tabs.find((t) => t.type === 'chat' && t.botId === botId) as ChatTab | undefined;
 
           if (existingTab) {
             // Replace the existing tab's session
@@ -164,8 +167,10 @@ const useTabStore = create<TabStore>()(
               tabs: state.tabs.map((tab) =>
                 tab.id === existingTab.id
                   ? {
-                      ...tab,
+                      type: 'chat' as const,
                       id: newTabId,
+                      botId: existingTab.botId,
+                      botName: existingTab.botName,
                       sessionUuid,
                       messages,
                       isLoading: false,
@@ -182,6 +187,7 @@ const useTabStore = create<TabStore>()(
               : `${botId}-new-${Date.now()}`;
 
             const newTab: ChatTab = {
+              type: 'chat',
               id: newTabId,
               botId,
               botName,
@@ -200,10 +206,68 @@ const useTabStore = create<TabStore>()(
       },
 
       /**
+       * Add a file tab (or activate if already open)
+       */
+      addFileTab: (filePath: string) => {
+        const fileName = filePath.split('/').pop() || 'Untitled';
+        const tabId = `file-${filePath}`;
+
+        // Check if file tab already exists
+        const existingTab = get().tabs.find((t) => t.id === tabId);
+        if (existingTab) {
+          set({ activeTabId: tabId });
+          return;
+        }
+
+        const newTab: FileTab = {
+          type: 'file',
+          id: tabId,
+          filePath,
+          fileName,
+          lastActivity: Date.now(),
+        };
+
+        set((state) => ({
+          tabs: [...state.tabs, newTab],
+          activeTabId: tabId,
+        }));
+      },
+
+      /**
        * Set user ID (from localStorage on app init)
        */
       setUserId: (userId: number) => {
         set({ userId });
+      },
+
+      /**
+       * Initialize default tab if no tabs exist
+       * Call this once on app mount
+       */
+      initializeDefaultTab: () => {
+        const state = get();
+
+        // Only run once and only if no tabs exist
+        if (state.hasInitialized || state.tabs.length > 0) {
+          return;
+        }
+
+        // Create default untitled file tab
+        const defaultTab: FileTab = {
+          type: 'file',
+          id: 'file-untitled-1',
+          filePath: 'untitled-1',
+          fileName: 'Untitled-1',
+          lastActivity: Date.now(),
+        };
+
+        set({
+          tabs: [defaultTab],
+          activeTabId: defaultTab.id,
+          hasInitialized: true,
+        });
+
+        console.log('✓ Created default untitled file tab');
       },
 
       /**
@@ -231,21 +295,30 @@ const useTabStore = create<TabStore>()(
           // Import api here to avoid circular dependency
           const { api } = await import('@/services/api');
 
-          // Group tabs by botId to minimize API calls
+          // Group chat tabs by botId to minimize API calls (skip file tabs)
           const tabsByBot = new Map<string, ChatTab[]>();
           for (const tab of state.tabs) {
-            if (!tabsByBot.has(tab.botId)) {
-              tabsByBot.set(tab.botId, []);
+            if (tab.type === 'chat') {
+              if (!tabsByBot.has(tab.botId)) {
+                tabsByBot.set(tab.botId, []);
+              }
+              tabsByBot.get(tab.botId)!.push(tab);
             }
-            tabsByBot.get(tab.botId)!.push(tab);
           }
 
           const validTabIds = new Set<string>();
 
+          // All file tabs are always valid (no backend validation needed)
+          for (const tab of state.tabs) {
+            if (tab.type === 'file') {
+              validTabIds.add(tab.id);
+            }
+          }
+
           // Check each bot's sessions
           for (const [botId, botTabs] of tabsByBot.entries()) {
             try {
-              const sessionsResponse = await api.session.getSessions(botId, state.userId);
+              const sessionsResponse = await api.session.getSessions(botId, state.userId, state.workspacePath || undefined);
 
               // Collect all valid session UUIDs for this bot
               const validUuids = new Set<string>();
@@ -301,6 +374,31 @@ const useTabStore = create<TabStore>()(
           // Fail-safe: keep all tabs if validation fails completely
         }
       },
+
+      /**
+       * Clear all workspace-specific data (tabs, sessions)
+       * Called when switching workspaces
+       */
+      clearWorkspaceData: () => {
+        set({
+          tabs: [],
+          activeTabId: null,
+          hasInitialized: false,
+        });
+        console.log('✓ Cleared workspace data');
+      },
+
+      /**
+       * Set current workspace path and clear data if workspace changed
+       */
+      setWorkspacePath: (path: string) => {
+        const currentWorkspace = get().workspacePath;
+        if (currentWorkspace && currentWorkspace !== path) {
+          // Workspace changed - clear all data
+          get().clearWorkspaceData();
+        }
+        set({ workspacePath: path });
+      },
       }),
       {
         name: 'labcart-tab-storage', // localStorage key
@@ -308,7 +406,50 @@ const useTabStore = create<TabStore>()(
           tabs: state.tabs,
           activeTabId: state.activeTabId,
           userId: state.userId,
+          workspacePath: state.workspacePath,
         }),
+        migrate: (persistedState: any, version: number) => {
+          // Ensure all tabs have proper type discriminator
+          if (persistedState && persistedState.tabs) {
+            persistedState.tabs = persistedState.tabs
+              .map((tab: any) => {
+                // Skip invalid tabs
+                if (!tab || !tab.id) return null;
+
+                // Chat tab migration
+                if (tab.botId) {
+                  return {
+                    type: 'chat',
+                    id: tab.id,
+                    botId: tab.botId,
+                    botName: tab.botName || 'Unknown Bot',
+                    sessionUuid: tab.sessionUuid || null,
+                    messages: tab.messages || [],
+                    isLoading: tab.isLoading || false,
+                    lastActivity: tab.lastActivity || Date.now(),
+                  };
+                }
+
+                // File tab migration
+                if (tab.filePath || tab.type === 'file') {
+                  const fileName = tab.fileName || (tab.filePath ? tab.filePath.split('/').pop() : 'Untitled');
+                  return {
+                    type: 'file',
+                    id: tab.id,
+                    filePath: tab.filePath || '',
+                    fileName: fileName || 'Untitled',
+                    lastActivity: tab.lastActivity || Date.now(),
+                  };
+                }
+
+                // Unknown tab type, skip it
+                return null;
+              })
+              .filter((tab: any) => tab !== null);
+          }
+
+          return persistedState;
+        },
       }
     ),
     { name: 'TabStore' }

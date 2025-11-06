@@ -61,8 +61,11 @@ export const sessionApi = {
   /**
    * Get session history for a bot + user
    */
-  async getSessions(botId: string, userId: number): Promise<SessionsResponse> {
-    const response = await fetch(`${API_BASE_URL}/sessions/${botId}/${userId}`);
+  async getSessions(botId: string, userId: number, workspacePath?: string): Promise<SessionsResponse> {
+    const url = workspacePath
+      ? `${API_BASE_URL}/sessions/${botId}/${userId}?workspace=${encodeURIComponent(workspacePath)}`
+      : `${API_BASE_URL}/sessions/${botId}/${userId}`;
+    const response = await fetch(url);
     return handleResponse<SessionsResponse>(response);
   },
 

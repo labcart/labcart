@@ -54,6 +54,28 @@
   --success: #28a745;
   --error: #dc3545;
 
+  /* Terminal theme (light mode) - Grayscale monochrome */
+  --terminal-background: #f6f6f5;
+  --terminal-foreground: #2c2826;
+  --terminal-cursor: #2c2826;
+  --terminal-selection: rgba(44, 40, 38, 0.15);
+  --terminal-black: #2c2826;           /* Darkest - your off-black */
+  --terminal-red: #4a4745;             /* Dark gray (errors) */
+  --terminal-green: #5a5855;           /* Medium-dark gray (success) */
+  --terminal-yellow: #6a6865;          /* Medium gray (warnings) */
+  --terminal-blue: #7a7875;            /* Medium-light gray (info) */
+  --terminal-magenta: #8a8885;         /* Light gray */
+  --terminal-cyan: #9a9895;            /* Lighter gray */
+  --terminal-white: #f6f6f5;           /* Lightest - matches background */
+  --terminal-bright-black: #666666;    /* Bright dark gray */
+  --terminal-bright-red: #7a7775;      /* Bright medium-dark */
+  --terminal-bright-green: #8a8785;    /* Bright medium */
+  --terminal-bright-yellow: #9a9795;   /* Bright medium-light */
+  --terminal-bright-blue: #aaa7a5;     /* Bright light */
+  --terminal-bright-magenta: #bab7b5;  /* Brighter light */
+  --terminal-bright-cyan: #cac7c5;     /* Very light */
+  --terminal-bright-white: #ecece9;    /* Brightest - sidebar bg */
+
   /* Shadcn compatibility */
   --foreground: #2c2826;
   --card: #ffffff;
@@ -108,6 +130,28 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* Terminal theme (dark mode) - Grayscale monochrome */
+  --terminal-background: #1e1e1e;
+  --terminal-foreground: #d4d4d4;
+  --terminal-cursor: #ffffff;
+  --terminal-selection: rgba(255, 255, 255, 0.2);
+  --terminal-black: #1a1a1a;           /* Darkest gray */
+  --terminal-red: #404040;             /* Dark gray (errors) */
+  --terminal-green: #565656;           /* Medium-dark gray (success) */
+  --terminal-yellow: #6c6c6c;          /* Medium gray (warnings) */
+  --terminal-blue: #828282;            /* Medium-light gray (info) */
+  --terminal-magenta: #989898;         /* Light gray */
+  --terminal-cyan: #aeaeae;            /* Lighter gray */
+  --terminal-white: #c4c4c4;           /* Very light gray */
+  --terminal-bright-black: #505050;    /* Bright dark gray */
+  --terminal-bright-red: #707070;      /* Bright medium-dark */
+  --terminal-bright-green: #909090;    /* Bright medium */
+  --terminal-bright-yellow: #b0b0b0;   /* Bright medium-light */
+  --terminal-bright-blue: #d0d0d0;     /* Bright light */
+  --terminal-bright-magenta: #e0e0e0;  /* Brighter light */
+  --terminal-bright-cyan: #f0f0f0;     /* Very bright */
+  --terminal-bright-white: #ffffff;    /* Pure white */
 }
 
 @layer base {
@@ -117,4 +161,117 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Thin scrollbar styling (VS Code-like) */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  height: 12px; /* Larger hit area */
+  width: 12px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  border: 3px solid transparent; /* Creates padding around the visual thumb */
+  background-clip: content-box; /* Makes background only show in content area */
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode scrollbar */
+.dark .thin-scrollbar {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.dark .thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.dark .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Context menu animation - smooth fade and scale in */
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in-scale {
+  animation: fade-in-scale 0.15s ease-out;
+}
+
+/* Toast notification - slide in from right */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out;
+}
+
+/* Dialog animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+/* Custom text selection color - darker grey for conductor.build aesthetic */
+::selection {
+  background-color: rgba(44, 40, 38, 0.25); /* Dark grey with transparency */
+  color: inherit;
+}
+
+::-moz-selection {
+  background-color: rgba(44, 40, 38, 0.25);
+  color: inherit;
 }

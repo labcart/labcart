@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface Bot {
   id: string;
@@ -16,8 +17,8 @@ interface BotContextType {
 
 const BotContext = createContext<BotContextType | undefined>(undefined);
 
-// Available bots configuration
-const BOTS: Bot[] = [
+// Fallback bots (in case Supabase isn't available)
+const FALLBACK_BOTS: Bot[] = [
   { id: 'claude', name: 'Claude', avatar: '/claude-seeklogo.svg' },
   { id: 'finnshipley', name: 'Finn' },
   { id: 'mattyatlas', name: 'Matty' },
@@ -25,18 +26,55 @@ const BOTS: Bot[] = [
 ];
 
 export function BotProvider({ children }: { children: ReactNode }) {
-  const [currentBot, setCurrentBotState] = useState<Bot>(BOTS[1]); // Default to Finn
+  const [availableBots, setAvailableBots] = useState<Bot[]>(FALLBACK_BOTS);
+  const [currentBot, setCurrentBotState] = useState<Bot>(FALLBACK_BOTS[1]); // Default to Finn
+
+  // Fetch bots from Supabase on mount
+  useEffect(() => {
+    async function fetchBots() {
+      try {
+        const { data, error } = await supabase
+          .from('bots')
+          .select('id, name')
+          .eq('is_platform_bot', true)
+          .eq('is_public', true);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          // Map database IDs to friendly IDs (for backwards compatibility)
+          const bots: Bot[] = data.map(bot => ({
+            id: bot.id,
+            name: bot.name,
+            avatar: bot.name === 'Claude' ? '/claude-seeklogo.svg' : undefined
+          }));
+
+          setAvailableBots(bots);
+
+          // Update current bot if it's still in the fallback state
+          if (currentBot.id === FALLBACK_BOTS[1].id) {
+            setCurrentBotState(bots[1] || bots[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching bots:', error);
+        // Keep using fallback bots
+      }
+    }
+
+    fetchBots();
+  }, []);
 
   // Load saved bot from localStorage on mount
   useEffect(() => {
     const savedBotId = localStorage.getItem('current-bot');
     if (savedBotId) {
-      const bot = BOTS.find(b => b.id === savedBotId);
+      const bot = availableBots.find(b => b.id === savedBotId);
       if (bot) {
         setCurrentBotState(bot);
       }
     }
-  }, []);
+  }, [availableBots]);
 
   const setCurrentBot = (bot: Bot) => {
     setCurrentBotState(bot);
@@ -44,7 +82,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <BotContext.Provider value={{ currentBot, setCurrentBot, availableBots: BOTS }}>
+    <BotContext.Provider value={{ currentBot, setCurrentBot, availableBots }}>
       {children}
     </BotContext.Provider>
   );

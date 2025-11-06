@@ -12,14 +12,16 @@ export default function LoginPage() {
       provider: 'github',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        skipBrowserRedirect: false,
       },
     });
 
     if (error) {
       console.error('Error logging in:', error);
       alert('Failed to login: ' + error.message);
+      setLoading(false);
     }
-    setLoading(false);
+    // Don't set loading false here - page will redirect
   };
 
   return (

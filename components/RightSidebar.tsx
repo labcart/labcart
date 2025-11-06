@@ -4,7 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Circle, Loader2, Check, Plus, Settings, MoreVertical, PanelLeft, PanelRight } from 'lucide-react';
 import { useBot } from '@/contexts/BotContext';
 import useTabStore from '@/store/tabStore';
+import useWorkspaceStore from '@/store/workspaceStore';
 import { api } from '@/services/api';
+import { useSocket } from '@/hooks/useSocket';
+import TerminalPanel from '@/components/TerminalPanel';
 
 interface RightSidebarProps {
   showLeftSidebar: boolean;
@@ -21,16 +24,26 @@ export default function RightSidebar({
 }: RightSidebarProps) {
   const { currentBot, setCurrentBot, availableBots } = useBot();
   const { addTab, updateTabMessages, userId, tabs, setActiveTab, replaceTabSession } = useTabStore();
-  const [terminalLines, setTerminalLines] = useState<string[]>([
-    '> Terminal ready',
-    '> Waiting for bot activity...'
-  ]);
-  const [activeTerminalTab, setActiveTerminalTab] = useState(0);
-  const [terminalTabs, setTerminalTabs] = useState([
-    { id: 0, name: 'Terminal 1' },
-    { id: 1, name: 'Terminal 2' }
-  ]);
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const { workspacePath } = useWorkspaceStore();
+
+  // Get socket for terminal
+  const socket = useSocket();
+
+  // Terminal visibility toggle
+  const [showTerminal, setShowTerminal] = useState(true);
+
+  // Keyboard shortcut: Ctrl+` to toggle terminal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === '`') {
+        e.preventDefault();
+        setShowTerminal(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // ========================================================================
   // Handle Team Member Click
@@ -42,8 +55,8 @@ export default function RightSidebar({
   const handleBotClick = async (bot: { id: string; name: string }) => {
     setCurrentBot(bot);
 
-    // FIRST: Check if we already have a tab open for this bot
-    const existingTab = tabs.find(tab => tab.botId === bot.id);
+    // FIRST: Check if we already have a chat tab open for this bot
+    const existingTab = tabs.find(tab => tab.type === 'chat' && tab.botId === bot.id);
     if (existingTab) {
       // Just switch to the existing tab
       setActiveTab(existingTab.id);
@@ -57,8 +70,8 @@ export default function RightSidebar({
     }
 
     try {
-      // Check if there's an existing session for this bot+user
-      const sessionsResponse = await api.session.getSessions(bot.id, userId);
+      // Check if there's an existing session for this bot+user in current workspace
+      const sessionsResponse = await api.session.getSessions(bot.id, userId, workspacePath);
 
       // Check current session first, then history
       const sessionToLoad = sessionsResponse.currentSession ||
@@ -122,9 +135,6 @@ export default function RightSidebar({
     // TODO: Open bot settings modal/page
   };
 
-  useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [terminalLines]);
 
   return (
     <div className={`h-full flex-shrink-0 flex flex-col ${showRightSidebar ? 'w-[320px]' : 'w-auto'}`}>
@@ -148,7 +158,8 @@ export default function RightSidebar({
 
       {/* Scrollable top sections - only show when sidebar is expanded */}
       {showRightSidebar && (
-      <div className="flex-1 overflow-y-auto">
+      <>
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
         {/* Team Section */}
         <div className="p-3">
           <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--text)' }}>TEAM</h2>
@@ -214,15 +225,15 @@ export default function RightSidebar({
           <div className="space-y-2">
             <div className="flex items-center gap-2 p-2 rounded hover:bg-black/5 cursor-pointer">
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#dc3545' }}></span>
-              <span className="text-sm" style={{ color: 'var(--text)' }}>Q4 Roadmap</span>
+              <span className="text-sm" style={{ color: 'var(--text)' }}>File Explorer</span>
             </div>
             <div className="flex items-center gap-2 p-2 rounded hover:bg-black/5 cursor-pointer">
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#fbbf24' }}></span>
-              <span className="text-sm" style={{ color: 'var(--text)' }}>MVP Launch</span>
+              <span className="text-sm" style={{ color: 'var(--text)' }}>Bot Delegation</span>
             </div>
             <div className="flex items-center gap-2 p-2 rounded hover:bg-black/5 cursor-pointer">
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#28a745' }}></span>
-              <span className="text-sm" style={{ color: 'var(--text)' }}>Tech Debt</span>
+              <span className="text-sm" style={{ color: 'var(--text)' }}>Session History</span>
             </div>
             <div className="flex items-center gap-2 p-2 rounded hover:bg-black/5 cursor-pointer">
               <span className="text-sm" style={{ color: 'var(--text)', opacity: 0.5 }}>+ New Plan</span>
@@ -296,47 +307,12 @@ export default function RightSidebar({
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="h-px mx-3 my-2" style={{ backgroundColor: 'var(--border)' }} />
-
-        {/* Terminal Section - Fixed at bottom */}
-        <div className="h-[300px] flex-shrink-0 border-t flex flex-col" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-        {/* Terminal Tabs */}
-        <div className="flex items-center gap-1 px-2 py-1 border-b" style={{ backgroundColor: 'var(--sidebar-bg)', borderColor: 'var(--border)' }}>
-          {terminalTabs.map((tab) => (
-            <div
-              key={tab.id}
-              className={`flex items-center gap-2 px-3 py-1 rounded-t text-xs cursor-pointer ${
-                activeTerminalTab === tab.id ? 'border border-b-0' : ''
-              }`}
-              style={
-                activeTerminalTab === tab.id
-                  ? { backgroundColor: 'var(--background)', borderColor: 'var(--border)' }
-                  : { color: 'var(--text)', opacity: 0.6 }
-              }
-              onClick={() => setActiveTerminalTab(tab.id)}
-            >
-              <span>{tab.name}</span>
-              <button className="text-xs hover:bg-black/10 rounded px-1" style={{ opacity: 0.5 }}>×</button>
-            </div>
-          ))}
-          <button className="px-2 py-1 text-xs hover:bg-white/50 rounded" style={{ color: 'var(--text)', opacity: 0.5 }}>
-            +
-          </button>
-        </div>
-
-        {/* Terminal Content */}
-        <div className="flex-1 overflow-y-auto p-3 font-mono text-xs" style={{ color: 'var(--text)' }}>
-          {terminalLines.map((line, index) => (
-            <div key={index} className="mb-1">
-              {line}
-            </div>
-          ))}
-          <div ref={terminalEndRef} />
-        </div>
       </div>
-    </div>
-    )}
+
+      {/* Terminal Panel - Fixed at bottom, outside scrollable area */}
+      {showTerminal && <TerminalPanel socket={socket} />}
+      </>
+      )}
     </div>
   );
 }
