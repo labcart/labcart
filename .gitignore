@@ -43,8 +43,24 @@ next-env.d.ts
 
 # electron
 /dist
+/dist-electron
+*.dmg
+*.zip
+*.AppImage
+*.exe
+*.deb
+*.rpm
+
+# electron binaries (210MB Node.js binary)
+electron/node
+
+# claude-bot-bundle - don't track nested git repo
+claude-bot-bundle/.git/
 
 # test files
 test-*.js
 test-*.html
-electron/node
+
+# Diagnostic/crash reports
+*.ips
+*.crash
