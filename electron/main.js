@@ -1,20 +1,77 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
-const isDev = process.env.NODE_ENV === 'development';
+const fs = require('fs');
+const isDev = !app.isPackaged;
 
 let serverProcess;
+let nextServerProcess;
 let mainWindow;
+
+/**
+ * Start Next.js server in production
+ */
+function startNextServer() {
+  return new Promise((resolve, reject) => {
+    const nodePath = isDev
+      ? 'node'
+      : path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'node');
+
+    const nextBinPath = path.join(__dirname, '..', 'node_modules', 'next', 'dist', 'bin', 'next');
+    const appPath = path.join(__dirname, '..');
+
+    console.log('Starting Next.js server...');
+    console.log('Node path:', nodePath);
+    console.log('Next bin path:', nextBinPath);
+    console.log('App path:', appPath);
+
+    nextServerProcess = spawn(nodePath, [nextBinPath, 'start'], {
+      cwd: appPath,
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        PORT: '3000'
+      },
+      stdio: 'pipe'
+    });
+
+    nextServerProcess.stdout.on('data', (data) => {
+      console.log('[Next.js]', data.toString());
+      if (data.toString().includes('Ready') || data.toString().includes('started')) {
+        resolve();
+      }
+    });
+
+    nextServerProcess.stderr.on('data', (data) => {
+      console.error('[Next.js Error]', data.toString());
+    });
+
+    nextServerProcess.on('error', (err) => {
+      console.error('Failed to start Next.js server:', err);
+      reject(err);
+    });
+
+    nextServerProcess.on('exit', (code) => {
+      console.log(`Next.js server exited with code ${code}`);
+    });
+
+    // Timeout after 30 seconds
+    setTimeout(() => resolve(), 30000);
+  });
+}
 
 /**
  * Start bot server in background
  */
 function startBotServer() {
   const serverPath = path.join(__dirname, '../claude-bot/server.js');
+  const nodePath = isDev
+    ? 'node'
+    : path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'node');
 
   console.log('Starting bot server from:', serverPath);
 
-  serverProcess = spawn('node', [serverPath], {
+  serverProcess = spawn(nodePath, [serverPath], {
     cwd: path.join(__dirname, '../claude-bot'),
     stdio: 'inherit',
     env: { ...process.env, ELECTRON_MODE: 'true' }
@@ -54,14 +111,11 @@ function createWindow() {
     mainWindow.show();
   });
 
-  // Load application
+  // Load application - always from Next.js server
+  mainWindow.loadURL('http://localhost:3000');
+
   if (isDev) {
-    // Development: Load Next.js dev server
-    mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
-  } else {
-    // Production: Load static build
-    mainWindow.loadFile(path.join(__dirname, '../out/index.html'));
   }
 
   // Clean up on close
@@ -73,7 +127,7 @@ function createWindow() {
 /**
  * App lifecycle: Ready
  */
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   console.log('LabCart Desktop starting...');
 
   // Register IPC handlers
@@ -99,10 +153,21 @@ app.whenReady().then(() => {
     return true;
   });
 
-  // Start backend server
+  // In production, start Next.js server first
+  if (!isDev) {
+    console.log('Starting Next.js server in production mode...');
+    try {
+      await startNextServer();
+      console.log('Next.js server started successfully');
+    } catch (err) {
+      console.error('Failed to start Next.js server:', err);
+    }
+  }
+
+  // Start bot server
   startBotServer();
 
-  // Wait a moment for server to start
+  // Wait a moment for servers to stabilize
   setTimeout(() => {
     createWindow();
   }, 2000);
@@ -119,7 +184,11 @@ app.whenReady().then(() => {
  * App lifecycle: All windows closed
  */
 app.on('window-all-closed', () => {
-  // Kill bot server
+  // Kill servers
+  if (nextServerProcess) {
+    console.log('Shutting down Next.js server...');
+    nextServerProcess.kill();
+  }
   if (serverProcess) {
     console.log('Shutting down bot server...');
     serverProcess.kill();
@@ -133,6 +202,9 @@ app.on('window-all-closed', () => {
  * App lifecycle: Before quit
  */
 app.on('before-quit', () => {
+  if (nextServerProcess) {
+    nextServerProcess.kill();
+  }
   if (serverProcess) {
     serverProcess.kill();
   }

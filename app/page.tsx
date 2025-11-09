@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import LeftSidebar from "@/components/LeftSidebar";
 import WorkspacePanel from "@/components/WorkspacePanel";
 import RightSidebar from "@/components/RightSidebar";
@@ -10,10 +12,40 @@ import useTabStore from "@/store/tabStore";
 import useWorkspaceStore from "@/store/workspaceStore";
 
 export default function Home() {
+  const router = useRouter();
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
   const [showRightSidebar, setShowRightSidebar] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const { validateTabs, userId, tabs, addFileTab, initializeDefaultTab, setWorkspacePath: setTabStoreWorkspace } = useTabStore();
   const { isFirstRun, workspacePath, setWorkspacePath } = useWorkspaceStore();
+
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push('/login');
+      } else {
+        setIsAuthenticated(true);
+      }
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        router.push('/login');
+      } else {
+        setIsAuthenticated(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   // Initialize default tab and validate persisted tabs on mount
   useEffect(() => {
@@ -47,6 +79,20 @@ export default function Home() {
     // Trigger workspace picker by setting isFirstRun to true temporarily
     useWorkspaceStore.setState({ isFirstRun: true });
   };
+
+  // Show loading while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ backgroundColor: 'var(--background)' }}>
+        <div style={{ color: 'var(--text)' }}>Loading...</div>
+      </div>
+    );
+  }
+
+  // Don't render IDE if not authenticated (will redirect to login)
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <BotProvider>

@@ -22,10 +22,16 @@
     },
     "files": [
       "electron/**/*",
-      "out/**/*",
+      ".next/**/*",
+      "!.next/cache/**/*",
       "../claude-bot/**/*",
       "node_modules/**/*",
       "!node_modules/.cache"
+    ],
+    "asarUnpack": [
+      "electron/node",
+      "node_modules/**/*",
+      ".next/**/*"
     ],
     "mac": {
       "target": [
@@ -73,8 +79,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dmg-builder": "^26.0.12",
-    "electron": "^39.1.0",
-    "electron-builder": "^26.0.12",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "tailwindcss": "^4",

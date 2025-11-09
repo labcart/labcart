@@ -19,7 +19,7 @@ interface WorkspaceState {
 const useWorkspaceStore = create<WorkspaceState>()(
   persist(
     (set) => ({
-      workspacePath: process.env.NEXT_PUBLIC_DEFAULT_WORKSPACE || '/opt/lab/labcart', // Dynamic workspace
+      workspacePath: '', // No default - user must select workspace
       isFirstRun: true, // Will be set to false after first workspace selection
       setWorkspacePath: (path: string) => {
         console.log('📂 Workspace changed to:', path);
