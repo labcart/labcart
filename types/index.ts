@@ -121,6 +121,7 @@ export interface TabStore {
   userId: number | null;
   hasInitialized: boolean;
   workspacePath: string | null;
+  botServerUrl: string; // URL of the bot server to connect to
 
   // Chat Tab Actions
   addTab: (botId: string, botName: string, sessionUuid?: string) => void;
@@ -142,6 +143,11 @@ export interface TabStore {
   initializeDefaultTab: () => void;
   clearWorkspaceData: () => void;
   setWorkspacePath: (path: string) => void;
+  setBotServerUrl: (url: string) => void;
+
+  // Supabase Sync Actions
+  loadWorkspaceState: (workspaceId: string) => Promise<void>;
+  saveWorkspaceState: (workspaceId: string) => Promise<void>;
 }
 
 // ============================================================================

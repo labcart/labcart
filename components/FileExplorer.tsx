@@ -131,6 +131,16 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     }
   }, [renamingPath]);
 
+  // Don't render if no workspace selected (must be AFTER all hooks)
+  if (!workspacePath) {
+    return (
+      <div className="p-4 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
+        <p>No workspace selected</p>
+        <p className="text-xs mt-2">Select a workspace folder to view files</p>
+      </div>
+    );
+  }
+
   const loadDirectory = async (dirPath: string) => {
     try {
       const response = await fetch(`/api/files?path=${encodeURIComponent(dirPath)}&workspace=${encodeURIComponent(workspacePath)}`);

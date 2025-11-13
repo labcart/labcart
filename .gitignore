@@ -64,3 +64,5 @@ test-*.html
 # Diagnostic/crash reports
 *.ips
 *.crash
+.open-next/
+.dev.vars

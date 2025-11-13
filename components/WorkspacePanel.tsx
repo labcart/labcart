@@ -16,6 +16,7 @@ import { MessageSquare, History, Plus, X, File } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import type { Message, ChatTab, FileTab } from '@/types';
 import { getActiveTheme } from '@/config/themes';
+import { supabase } from '@/lib/supabase';
 
 export default function WorkspacePanel() {
   // Get active theme
@@ -38,9 +39,11 @@ export default function WorkspacePanel() {
     replaceTabSession,
     setUserId,
     getActiveTab,
+    loadWorkspaceState,
+    saveWorkspaceState,
   } = useTabStore();
 
-  const { workspacePath } = useWorkspaceStore();
+  const { workspacePath, workspaceId } = useWorkspaceStore();
 
   const [inputValue, setInputValue] = useState('');
   const [showSessionHistory, setShowSessionHistory] = useState(false);
@@ -167,17 +170,69 @@ export default function WorkspacePanel() {
   }, [connected, messageQueue, socket, getActiveTab, addMessageToTab]);
 
   // ========================================================================
-  // User ID Initialization
+  // User ID Initialization - Use Supabase User ID
   // ========================================================================
 
   useEffect(() => {
-    let id = localStorage.getItem('labcart-user-id');
-    if (!id) {
-      id = String(Math.floor(Math.random() * 1000000000));
-      localStorage.setItem('labcart-user-id', id);
-    }
-    setUserId(parseInt(id));
+    const initializeUserId = async () => {
+      // Get Supabase session to extract user ID
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.user?.id) {
+        // Hash the UUID to a numeric ID (stable across sessions)
+        // Use a simple hash function that converts UUID to consistent integer
+        const numericId = parseInt(
+          session.user.id
+            .split('')
+            .reduce((acc, char) => acc + char.charCodeAt(0), 0)
+            .toString()
+            .slice(0, 9)
+        );
+
+        console.log(`🔐 User ID from Supabase: ${session.user.id} → ${numericId}`);
+        setUserId(numericId);
+        localStorage.setItem('labcart-user-id', numericId.toString());
+      } else {
+        console.warn('⚠️  No Supabase session found, falling back to localStorage');
+        // Fallback: check localStorage
+        const storedId = localStorage.getItem('labcart-user-id');
+        if (storedId) {
+          setUserId(parseInt(storedId));
+        }
+      }
+    };
+
+    initializeUserId();
   }, [setUserId]);
+
+  // ========================================================================
+  // Load Workspace State from Supabase on Mount
+  // ========================================================================
+
+  useEffect(() => {
+    // Load workspace state when workspace ID is available
+    if (workspaceId && userId) {
+      console.log('📂 Loading workspace state for:', workspaceId);
+      loadWorkspaceState(workspaceId);
+    }
+  }, [workspaceId, userId, loadWorkspaceState]);
+
+  // ========================================================================
+  // Auto-Save Workspace State to Supabase on Tab Changes
+  // ========================================================================
+
+  useEffect(() => {
+    // Save workspace state whenever tabs or activeTabId changes
+    if (workspaceId && userId && tabs.length > 0) {
+      // Debounce to avoid excessive saves
+      const timeoutId = setTimeout(() => {
+        console.log('💾 Auto-saving workspace state...');
+        saveWorkspaceState(workspaceId);
+      }, 1000); // Wait 1 second after last change
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [tabs, activeTabId, workspaceId, userId, saveWorkspaceState]);
 
   // ========================================================================
   // WebSocket Message Handler

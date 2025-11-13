@@ -11,6 +11,16 @@ export async function GET(request: NextRequest) {
   const workspacePath = searchParams.get('workspace') || process.env.LABCART_WORKSPACE || '/opt/lab/labcart';
   const dirPath = searchParams.get('path') || workspacePath;
 
+  // Validate workspace path exists
+  if (!workspacePath || !dirPath) {
+    return new Response('Workspace path is required', { status: 400 });
+  }
+
+  // Check if path exists before watching
+  if (!fs.existsSync(dirPath)) {
+    return new Response('Directory does not exist', { status: 404 });
+  }
+
   // Security check
   const normalizedPath = path.normalize(dirPath);
   const normalizedWorkspace = path.normalize(workspacePath);

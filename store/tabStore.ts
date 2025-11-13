@@ -22,6 +22,7 @@ const useTabStore = create<TabStore>()(
       userId: null,
       hasInitialized: false, // Track if we've done first-time initialization
       workspacePath: null, // Track which workspace this state belongs to
+      botServerUrl: 'http://localhost:3010', // Default to localhost for dev
 
       // ========================================================================
       // Actions
@@ -399,6 +400,111 @@ const useTabStore = create<TabStore>()(
         }
         set({ workspacePath: path });
       },
+
+      /**
+       * Set bot server URL
+       */
+      setBotServerUrl: (url: string) => {
+        console.log(`🔧 Setting bot server URL to: ${url}`);
+        set({ botServerUrl: url });
+      },
+
+      /**
+       * Load workspace state from Supabase
+       * Call this after workspace identification and user auth
+       */
+      loadWorkspaceState: async (workspaceId: string) => {
+        try {
+          // Import supabase here to avoid circular dependency
+          const { supabase } = await import('@/lib/supabase');
+
+          // Get auth session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            console.log('⚠️  No auth session, skipping workspace state load');
+            return;
+          }
+
+          const response = await fetch(
+            `/api/workspace/state?workspaceId=${workspaceId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+              },
+            }
+          );
+
+          if (!response.ok) {
+            console.error('Failed to load workspace state:', await response.text());
+            return;
+          }
+
+          const data = await response.json();
+
+          if (data.success && data.state) {
+            console.log(`📂 Loading workspace state from Supabase (${data.state.tabs?.length || 0} tabs)`);
+
+            set({
+              tabs: data.state.tabs || [],
+              activeTabId: data.state.activeTabId || null,
+            });
+
+            console.log('✅ Workspace state loaded from Supabase');
+          } else {
+            console.log('ℹ️  No saved workspace state found in Supabase');
+          }
+        } catch (error) {
+          console.error('Error loading workspace state:', error);
+          // Fail-safe: keep current state if load fails
+        }
+      },
+
+      /**
+       * Save current workspace state to Supabase
+       * Debounced to avoid excessive API calls
+       */
+      saveWorkspaceState: async (workspaceId: string) => {
+        try {
+          const state = get();
+
+          // Import supabase here to avoid circular dependency
+          const { supabase } = await import('@/lib/supabase');
+
+          // Get auth session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            console.log('⚠️  No auth session, skipping workspace state save');
+            return;
+          }
+
+          const stateToSave = {
+            tabs: state.tabs,
+            activeTabId: state.activeTabId,
+          };
+
+          const response = await fetch('/api/workspace/state', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              workspaceId,
+              state: stateToSave,
+            }),
+          });
+
+          if (!response.ok) {
+            console.error('Failed to save workspace state:', await response.text());
+            return;
+          }
+
+          console.log('💾 Workspace state saved to Supabase');
+        } catch (error) {
+          console.error('Error saving workspace state:', error);
+          // Fail silently - localStorage still has the data
+        }
+      },
       }),
       {
         name: 'labcart-tab-storage', // localStorage key
@@ -407,6 +513,7 @@ const useTabStore = create<TabStore>()(
           activeTabId: state.activeTabId,
           userId: state.userId,
           workspacePath: state.workspacePath,
+          botServerUrl: state.botServerUrl,
         }),
         migrate: (persistedState: any, version: number) => {
           // Ensure all tabs have proper type discriminator

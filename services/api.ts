@@ -14,8 +14,22 @@ import type {
   SwitchSessionResponse,
   ApiError,
 } from '@/types';
+import useTabStore from '@/store/tabStore';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3010';
+/**
+ * Get the bot server URL from the store
+ * Falls back to localhost if store is not initialized
+ */
+function getApiBaseUrl(): string {
+  if (typeof window === 'undefined') {
+    // Server-side: use env var or default
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3010';
+  }
+
+  // Client-side: get from store
+  const botServerUrl = useTabStore.getState().botServerUrl;
+  return botServerUrl || 'http://localhost:3010';
+}
 
 // ============================================================================
 // Error Handling
@@ -62,6 +76,7 @@ export const sessionApi = {
    * Get session history for a bot + user
    */
   async getSessions(botId: string, userId: number, workspacePath?: string): Promise<SessionsResponse> {
+    const API_BASE_URL = getApiBaseUrl();
     const url = workspacePath
       ? `${API_BASE_URL}/sessions/${botId}/${userId}?workspace=${encodeURIComponent(workspacePath)}`
       : `${API_BASE_URL}/sessions/${botId}/${userId}`;
@@ -73,6 +88,7 @@ export const sessionApi = {
    * Get messages from a specific session
    */
   async getMessages(sessionUuid: string): Promise<MessagesResponse> {
+    const API_BASE_URL = getApiBaseUrl();
     const response = await fetch(`${API_BASE_URL}/messages/${sessionUuid}`);
     return handleResponse<MessagesResponse>(response);
   },
@@ -83,6 +99,7 @@ export const sessionApi = {
   async createNewSession(
     request: NewSessionRequest
   ): Promise<NewSessionResponse> {
+    const API_BASE_URL = getApiBaseUrl();
     const response = await fetch(`${API_BASE_URL}/new-session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -97,6 +114,7 @@ export const sessionApi = {
   async switchSession(
     request: SwitchSessionRequest
   ): Promise<SwitchSessionResponse> {
+    const API_BASE_URL = getApiBaseUrl();
     const response = await fetch(`${API_BASE_URL}/switch-session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -119,6 +137,7 @@ export interface HealthResponse {
 
 export const healthApi = {
   async check(): Promise<HealthResponse> {
+    const API_BASE_URL = getApiBaseUrl();
     const response = await fetch(`${API_BASE_URL}/health`);
     return handleResponse<HealthResponse>(response);
   },

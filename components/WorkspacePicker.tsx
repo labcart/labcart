@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FolderOpen, Check } from 'lucide-react';
+import { FolderOpen, Check, AlertCircle } from 'lucide-react';
 
 interface WorkspacePickerProps {
   onWorkspaceSelected: (path: string) => void;
@@ -13,32 +13,40 @@ interface WorkspacePickerProps {
  * Displays on first run or when user needs to change workspace.
  * Matches conductor.build minimal macOS aesthetic.
  *
- * Works in two modes:
- * 1. Electron: Native folder picker via window.electron API
- * 2. Web: Manual path input as fallback
+ * Works in three modes:
+ * 1. Electron: Native folder picker via IPC (returns full path directly)
+ * 2. Chrome/Edge: File System Access API + backend path resolution
+ *    - User picks folder with native browser picker
+ *    - Browser returns folder name only (e.g., "labcart")
+ *    - Backend resolves to full path (e.g., "/Users/macbook/play/lab/labcart")
+ * 3. Firefox/Fallback: Manual path input
  */
 export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePickerProps) {
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [manualPath, setManualPath] = useState<string>('');
   const [isElectron, setIsElectron] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
-
-  // TEMPORARY: Quick test folders for web development
-  const testFolders = [
-    '/opt/lab',
-    '/opt/lab/claude-bot',
-    '/opt/lab/labcart',
-    '/opt/projects',
-  ];
+  const [supportsFileSystemAccess, setSupportsFileSystemAccess] = useState(false);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     // Check if running in Electron
-    setIsElectron(typeof window !== 'undefined' && (window as any).electron !== undefined);
+    const electronCheck = typeof window !== 'undefined' && (window as any).electron !== undefined;
+    setIsElectron(electronCheck);
+
+    // Check if browser supports File System Access API
+    if (!electronCheck && typeof window !== 'undefined') {
+      const hasFileSystemAccess = 'showDirectoryPicker' in window;
+      setSupportsFileSystemAccess(hasFileSystemAccess);
+      setShowManualInput(!hasFileSystemAccess); // Only show manual input if no picker available
+    }
   }, []);
 
   const handleOpenFolderPicker = async () => {
+    setError('');
+
     if (isElectron) {
-      // Electron mode: Use native folder picker
+      // Electron: Use native IPC picker (returns full path directly)
       try {
         const path = await (window as any).electron.selectFolder();
         if (path) {
@@ -47,12 +55,45 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
         }
       } catch (error) {
         console.error('Error opening folder picker:', error);
+        setError('Failed to open folder picker. Please try again.');
       }
-    } else {
-      // Web mode: User must type path manually
-      if (manualPath.trim()) {
-        setSelectedPath(manualPath);
-        onWorkspaceSelected(manualPath);
+    } else if (supportsFileSystemAccess) {
+      // Browser: Use File System Access API + backend path resolution
+      try {
+        // Open native folder picker
+        const dirHandle = await (window as any).showDirectoryPicker();
+        const folderName = dirHandle.name;
+
+        console.log(`📁 Selected folder: "${folderName}"`);
+        console.log('🔍 Resolving full path...');
+
+        // Call backend to resolve folder name to full path
+        const response = await fetch('/api/workspace/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderName }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          console.log(`✅ Resolved to: ${data.path}`);
+          setSelectedPath(data.path);
+          onWorkspaceSelected(data.path);
+        } else {
+          console.error('Failed to resolve path:', data);
+          setError(data.message || 'Could not find the selected folder. Please try manual input.');
+          setShowManualInput(true);
+        }
+      } catch (error: any) {
+        // User cancelled or picker failed
+        if (error.name === 'AbortError') {
+          console.log('User cancelled folder selection');
+        } else {
+          console.error('Error with folder picker:', error);
+          setError('Failed to open folder picker. Please try manual input.');
+          setShowManualInput(true);
+        }
       }
     }
   };
@@ -95,150 +136,106 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
 
         {/* Body */}
         <div className="px-6 py-6">
-          {isElectron ? (
-            /* Electron Mode: Native folder picker button */
-            <div className="space-y-4">
-              <p className="text-sm" style={{ color: '#7a7875' }}>
-                Select a folder to use as your workspace. This is where your project files and chat history will be stored.
-              </p>
+          <div className="space-y-4">
+            {/* Description */}
+            <p className="text-sm" style={{ color: '#7a7875' }}>
+              {isElectron
+                ? 'Select a folder to use as your workspace. This is where your project files and chat history will be stored.'
+                : supportsFileSystemAccess
+                ? 'Select a folder to use as your workspace. Your files remain on your computer - we only access them with your permission.'
+                : 'Your browser doesn\'t support the native folder picker. Please enter the absolute path to your workspace folder.'}
+            </p>
 
-              <button
-                onClick={handleOpenFolderPicker}
-                className="w-full px-6 py-4 rounded-lg flex items-center justify-center gap-3 transition-all duration-150 font-medium"
-                style={{
-                  backgroundColor: '#2c2826',
-                  color: '#ffffff',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#454340';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#2c2826';
-                }}
-              >
-                <FolderOpen size={20} />
-                <span>Open Folder</span>
-              </button>
+            {/* Error message */}
+            {error && (
+              <div className="flex items-start gap-2 p-3 rounded-lg" style={{ backgroundColor: '#fff3cd', border: '1px solid #ffc107' }}>
+                <AlertCircle size={16} style={{ color: '#856404', marginTop: '2px' }} />
+                <span className="text-sm" style={{ color: '#856404' }}>
+                  {error}
+                </span>
+              </div>
+            )}
 
-              {selectedPath && (
-                <div className="flex items-center gap-2 p-3 rounded-lg" style={{ backgroundColor: '#f6f6f5' }}>
-                  <Check size={16} style={{ color: '#28a745' }} />
-                  <span className="font-mono text-sm" style={{ color: '#2c2826' }}>
-                    {selectedPath}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Web Mode: Quick test list + manual input */
-            <div className="space-y-4">
-              {!showManualInput ? (
-                <>
-                  <p className="text-sm" style={{ color: '#7a7875' }}>
-                    Quick select a test workspace:
-                  </p>
+            {(isElectron || supportsFileSystemAccess) && !showManualInput ? (
+              /* Electron or Browser with File System Access API: Native picker button */
+              <>
+                <button
+                  onClick={handleOpenFolderPicker}
+                  className="w-full px-6 py-4 rounded-lg flex items-center justify-center gap-3 transition-all duration-150 font-medium"
+                  style={{
+                    backgroundColor: '#2c2826',
+                    color: '#ffffff',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#454340';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#2c2826';
+                  }}
+                >
+                  <FolderOpen size={20} />
+                  <span>Open Folder</span>
+                </button>
 
-                  {/* Quick test folders */}
-                  <div className="space-y-2">
-                    {testFolders.map((folder) => (
-                      <button
-                        key={folder}
-                        onClick={() => {
-                          setSelectedPath(folder);
-                          onWorkspaceSelected(folder);
-                        }}
-                        className="w-full px-4 py-3 rounded-lg flex items-center gap-3 transition-all duration-150 text-left"
-                        style={{
-                          backgroundColor: selectedPath === folder ? '#f6f6f5' : '#ffffff',
-                          border: '1px solid #e0e0e0',
-                          color: '#2c2826',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (selectedPath !== folder) {
-                            e.currentTarget.style.backgroundColor = '#f6f6f5';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (selectedPath !== folder) {
-                            e.currentTarget.style.backgroundColor = '#ffffff';
-                          }
-                        }}
-                      >
-                        <FolderOpen size={16} style={{ color: '#7a7875' }} />
-                        <span className="font-mono text-sm flex-1 truncate">
-                          {folder}
-                        </span>
-                        {selectedPath === folder && (
-                          <Check size={16} style={{ color: '#28a745' }} />
-                        )}
-                      </button>
-                    ))}
+                {/* Selected path display */}
+                {selectedPath && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg" style={{ backgroundColor: '#f6f6f5' }}>
+                    <Check size={16} style={{ color: '#28a745' }} />
+                    <span className="font-mono text-sm" style={{ color: '#2c2826' }}>
+                      {selectedPath}
+                    </span>
                   </div>
+                )}
 
-                  {/* Manual input toggle */}
+                {/* Manual input fallback for browsers */}
+                {!isElectron && (
                   <button
+                    type="button"
                     onClick={() => setShowManualInput(true)}
-                    className="w-full text-sm py-2"
+                    className="text-sm underline"
                     style={{ color: '#7a7875' }}
                   >
-                    Or enter path manually →
+                    Enter path manually instead
                   </button>
-                </>
-              ) : (
-                /* Manual input form */
-                <form onSubmit={handleManualPathSubmit} className="space-y-4">
-                  <p className="text-sm" style={{ color: '#7a7875' }}>
-                    Enter the absolute path to your workspace folder:
-                  </p>
+                )}
+              </>
+            ) : (
+              /* Browser mode: Manual path input */
+              <form onSubmit={handleManualPathSubmit} className="space-y-4">
+                <input
+                  type="text"
+                  value={manualPath}
+                  onChange={(e) => setManualPath(e.target.value)}
+                  placeholder="/absolute/path/to/workspace"
+                  className="w-full px-4 py-3 rounded-lg font-mono text-sm"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e0e0e0',
+                    color: '#2c2826',
+                  }}
+                  autoFocus
+                />
 
-                  <input
-                    type="text"
-                    value={manualPath}
-                    onChange={(e) => setManualPath(e.target.value)}
-                    placeholder="/absolute/path/to/workspace"
-                    className="w-full px-4 py-3 rounded-lg font-mono text-sm"
-                    style={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e0e0e0',
-                      color: '#2c2826',
-                    }}
-                    autoFocus
-                  />
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowManualInput(false)}
-                      className="px-4 py-2 rounded-lg text-sm"
-                      style={{
-                        backgroundColor: '#f6f6f5',
-                        color: '#2c2826',
-                      }}
-                    >
-                      ← Back
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 px-6 py-3 rounded-lg flex items-center justify-center gap-3 transition-all duration-150 font-medium"
-                      style={{
-                        backgroundColor: '#2c2826',
-                        color: '#ffffff',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#454340';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#2c2826';
-                      }}
-                    >
-                      <Check size={20} />
-                      <span>Select Workspace</span>
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          )}
+                <button
+                  type="submit"
+                  className="w-full px-6 py-3 rounded-lg flex items-center justify-center gap-3 transition-all duration-150 font-medium"
+                  style={{
+                    backgroundColor: '#2c2826',
+                    color: '#ffffff',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#454340';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#2c2826';
+                  }}
+                >
+                  <Check size={20} />
+                  <span>Select Workspace</span>
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     </div>

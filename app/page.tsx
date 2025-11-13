@@ -69,10 +69,34 @@ export default function Home() {
     addFileTab(filePath);
   };
 
-  const handleWorkspaceSelected = (path: string) => {
-    setWorkspacePath(path);
-    setTabStoreWorkspace(path);
-    console.log('✅ Workspace selected:', path);
+  const handleWorkspaceSelected = async (path: string) => {
+    try {
+      // Call backend to identify or create workspace
+      const response = await fetch('/api/workspace/identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspacePath: path }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Store both path and ID
+        useWorkspaceStore.getState().setWorkspace(path, data.workspaceId);
+        setTabStoreWorkspace(path);
+        console.log('✅ Workspace identified:', { path, id: data.workspaceId, isNew: data.isNew });
+      } else {
+        console.error('Failed to identify workspace:', data);
+        // Fallback: just set the path
+        setWorkspacePath(path);
+        setTabStoreWorkspace(path);
+      }
+    } catch (error) {
+      console.error('Error identifying workspace:', error);
+      // Fallback: just set the path
+      setWorkspacePath(path);
+      setTabStoreWorkspace(path);
+    }
   };
 
   const handleHomeClick = () => {
@@ -96,8 +120,8 @@ export default function Home() {
 
   return (
     <BotProvider>
-      {/* Show workspace picker on first run or when home button clicked */}
-      {isFirstRun && (
+      {/* Show workspace picker on first run OR when no workspace is set */}
+      {(isFirstRun || !workspacePath) && (
         <WorkspacePicker onWorkspaceSelected={handleWorkspaceSelected} />
       )}
 

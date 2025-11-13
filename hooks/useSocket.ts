@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { BotMessageEvent } from '@/types';
+import useTabStore from '@/store/tabStore';
 
 export function useSocket(): Socket | null {
   const [socket, setSocket] = useState<Socket | null>(null);
+  const botServerUrl = useTabStore((state) => state.botServerUrl);
 
   useEffect(() => {
-    // Connect to bot server
-    const newSocket = io('http://localhost:3010', {
+    // Connect to bot server using dynamic URL from store
+    console.log(`🔌 Connecting to bot server: ${botServerUrl}`);
+    const newSocket = io(botServerUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -46,7 +49,7 @@ export function useSocket(): Socket | null {
     return () => {
       newSocket.disconnect();
     };
-  }, []);
+  }, [botServerUrl]); // Reconnect if bot server URL changes
 
   return socket;
 }
