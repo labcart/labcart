@@ -7,39 +7,33 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 /**
  * GET /api/bots
  * Get all bots for a user (or specific server)
+ * Returns platform bots (is_platform_bot=true) and user's own bot instances
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const serverId = searchParams.get('serverId');
-
-    if (!userId && !serverId) {
-      return NextResponse.json(
-        { error: 'userId or serverId is required' },
-        { status: 400 }
-      );
-    }
+    const platformOnly = searchParams.get('platformOnly') === 'true';
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     let query = supabase.from('bots').select('*');
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    if (serverId) {
-      // Get all bots for a specific server via bot_servers join
-      const { data: serverData } = await supabase
-        .from('bot_servers')
-        .select('user_id')
-        .eq('id', serverId)
-        .single();
-
-      if (serverData) {
-        query = query.eq('user_id', serverData.user_id);
-      }
+    if (platformOnly) {
+      // Get only platform bots (templates users can install)
+      query = query.eq('is_platform_bot', true).eq('is_public', true);
+    } else if (userId) {
+      // Get user's own bot instances OR public platform bots
+      query = query.or(`user_id.eq.${userId},and(is_platform_bot.eq.true,is_public.eq.true)`);
+    } else if (serverId) {
+      // Get all bots for a specific server
+      query = query.eq('server_id', serverId);
+    } else {
+      return NextResponse.json(
+        { error: 'userId, serverId, or platformOnly parameter is required' },
+        { status: 400 }
+      );
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -68,34 +62,92 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/bots
- * Create a new bot instance
+ * Create a new bot instance (either from scratch or by "installing" a platform bot)
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, brain, displayName, workspace, webOnly = true, telegramToken } = body;
+    const {
+      userId,
+      name,
+      description,
+      systemPrompt,
+      serverId,
+      workspace,
+      webOnly = true,
+      telegramToken,
+      platformBotId // If installing a platform bot, provide its ID
+    } = body;
 
-    if (!userId || !brain) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'userId and brain are required' },
+        { error: 'userId is required' },
         { status: 400 }
       );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Create bot record
-    const { data, error } = await supabase
-      .from('bots')
-      .insert({
-        user_id: userId,
-        brain,
-        display_name: displayName,
+    let botData: any;
+
+    if (platformBotId) {
+      // User is "installing" a platform bot - copy the template
+      const { data: platformBot, error: fetchError } = await supabase
+        .from('bots')
+        .select('*')
+        .eq('id', platformBotId)
+        .single();
+
+      if (fetchError || !platformBot) {
+        return NextResponse.json(
+          { error: 'Platform bot not found' },
+          { status: 404 }
+        );
+      }
+
+      // Create a new instance for the user
+      botData = {
+        name: platformBot.name,
+        description: platformBot.description,
+        system_prompt: platformBot.system_prompt,
+        creator_id: platformBot.creator_id, // Keep original creator
+        user_id: userId, // But assign to this user
+        server_id: serverId,
+        is_platform_bot: false, // This is now a user instance
+        is_public: false,
         workspace,
         web_only: webOnly,
         telegram_token: telegramToken,
         active: true,
-      })
+      };
+    } else {
+      // User is creating a custom bot from scratch
+      if (!name || !systemPrompt) {
+        return NextResponse.json(
+          { error: 'name and systemPrompt are required for custom bots' },
+          { status: 400 }
+        );
+      }
+
+      botData = {
+        name,
+        description,
+        system_prompt: systemPrompt,
+        creator_id: userId,
+        user_id: userId,
+        server_id: serverId,
+        is_platform_bot: false,
+        is_public: false,
+        workspace,
+        web_only: webOnly,
+        telegram_token: telegramToken,
+        active: true,
+      };
+    }
+
+    const { data, error } = await supabase
+      .from('bots')
+      .insert(botData)
       .select()
       .single();
 
@@ -107,7 +159,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`✅ Bot created: ${data.id} (brain: ${brain}) for user ${userId}`);
+    console.log(`✅ Bot created: ${data.id} for user ${userId}`);
 
     return NextResponse.json({
       success: true,
@@ -133,7 +185,18 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, brain, displayName, workspace, webOnly, active, telegramToken } = body;
+    const {
+      id,
+      name,
+      description,
+      systemPrompt,
+      serverId,
+      workspace,
+      webOnly,
+      active,
+      telegramToken,
+      isPublic
+    } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -146,12 +209,15 @@ export async function PUT(request: NextRequest) {
 
     // Build update object with only provided fields
     const updates: any = {};
-    if (brain !== undefined) updates.brain = brain;
-    if (displayName !== undefined) updates.display_name = displayName;
+    if (name !== undefined) updates.name = name;
+    if (description !== undefined) updates.description = description;
+    if (systemPrompt !== undefined) updates.system_prompt = systemPrompt;
+    if (serverId !== undefined) updates.server_id = serverId;
     if (workspace !== undefined) updates.workspace = workspace;
     if (webOnly !== undefined) updates.web_only = webOnly;
     if (active !== undefined) updates.active = active;
     if (telegramToken !== undefined) updates.telegram_token = telegramToken;
+    if (isPublic !== undefined) updates.is_public = isPublic;
 
     const { data, error } = await supabase
       .from('bots')
