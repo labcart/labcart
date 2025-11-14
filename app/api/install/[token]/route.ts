@@ -139,10 +139,16 @@ USER_ID=${userId}
 SERVER_ID=${serverIdValue}
 COORDINATION_URL=${coordinationUrl}/api/servers/register
 HTTP_PORT=3010
+NEXT_PUBLIC_SUPABASE_URL=https://maaotshzykjncoifrbmj.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hYW90c2h6eWtqbmNvaWZyYm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyMDM1OTUsImV4cCI6MjA3Nzc3OTU5NX0.gtv5duMO1_eRsDkuzrMIWqSira1CnnImQagGTEXepVs
 EOF
 
 echo "✅ Configuration saved to .env"
 echo ""
+
+# Initialize bots from brain files
+echo "🤖 Initializing bots..."
+node scripts/init-bots.js
 
 # Start the server
 echo "🚀 Starting bot server..."
