@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 interface Bot {
   id: string;
   name: string;
+  displayName?: string;
   avatar?: string;
 }
 
@@ -29,32 +30,41 @@ export function BotProvider({ children }: { children: ReactNode }) {
   const [availableBots, setAvailableBots] = useState<Bot[]>(FALLBACK_BOTS);
   const [currentBot, setCurrentBotState] = useState<Bot>(FALLBACK_BOTS[1]); // Default to Finn
 
-  // Fetch bots from Supabase on mount
+  // Fetch user's bots from Supabase on mount
   useEffect(() => {
     async function fetchBots() {
       try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.log('No user logged in, using fallback bots');
+          return;
+        }
+
+        // Fetch this user's bots
         const { data, error } = await supabase
           .from('bots')
-          .select('id, name')
-          .eq('is_platform_bot', true)
-          .eq('is_public', true);
+          .select('id, name, display_name')
+          .eq('user_id', user.id)
+          .eq('active', true)
+          .order('created_at', { ascending: true });
 
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // Map database IDs to friendly IDs (for backwards compatibility)
           const bots: Bot[] = data.map(bot => ({
             id: bot.id,
             name: bot.name,
+            displayName: bot.display_name || bot.name,
             avatar: bot.name === 'Claude' ? '/claude-seeklogo.svg' : undefined
           }));
 
           setAvailableBots(bots);
 
-          // Update current bot if it's still in the fallback state
-          if (currentBot.id === FALLBACK_BOTS[1].id) {
-            setCurrentBotState(bots[1] || bots[0]);
-          }
+          // Set first bot as default
+          setCurrentBotState(bots[0]);
+        } else {
+          console.log('No bots found for user, using fallback');
         }
       } catch (error) {
         console.error('Error fetching bots:', error);

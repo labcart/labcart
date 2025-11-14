@@ -187,7 +187,7 @@ export default function RightSidebar({
 
                   {/* Bot Name */}
                   <span className="text-sm flex-1" style={{ color: 'var(--text)' }}>
-                    {bot.name}
+                    {(bot as any).displayName || bot.name}
                   </span>
 
                   {/* Hover Actions */}
