@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS bot_servers (
   status TEXT DEFAULT 'offline' CHECK (status IN ('provisioning', 'online', 'offline', 'terminated')),
   last_heartbeat TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   terminated_at TIMESTAMPTZ,
   UNIQUE(user_id, server_name)
 );
