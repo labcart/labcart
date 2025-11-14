@@ -41,8 +41,8 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
 
     loadDirectory(workspacePath);
 
-    // Set up file system watcher for auto-refresh
-    const eventSource = new EventSource('/api/files/watch?path=' + encodeURIComponent(workspacePath) + '&workspace=' + encodeURIComponent(workspacePath));
+    // Set up file system watcher for auto-refresh (via bot server)
+    const eventSource = new EventSource('http://localhost:3010/files/watch?path=' + encodeURIComponent(workspacePath) + '&workspace=' + encodeURIComponent(workspacePath));
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -143,7 +143,7 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
 
   const loadDirectory = async (dirPath: string) => {
     try {
-      const response = await fetch(`/api/files?path=${encodeURIComponent(dirPath)}&workspace=${encodeURIComponent(workspacePath)}`);
+      const response = await fetch(`http://localhost:3010/files?path=${encodeURIComponent(dirPath)}&workspace=${encodeURIComponent(workspacePath)}`);
       const data = await response.json();
 
       if (!response.ok || !data.files) {

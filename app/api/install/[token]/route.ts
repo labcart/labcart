@@ -12,10 +12,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const { token } = params;
+    const { token } = await params;
 
     if (!token) {
       return new NextResponse('Missing token', { status: 400 });
@@ -114,16 +114,15 @@ echo "📦 Installing to: $INSTALL_DIR"
 echo ""
 
 # Clone or update the bot server repository
-if [ -d "claude-bot" ]; then
+if [ -d "claude-bot/.git" ]; then
     echo "📥 Updating existing installation..."
     cd claude-bot
     git pull
 else
     echo "📥 Cloning bot server..."
-    # TODO: Replace with actual repository URL when available
-    echo "⚠️  Repository URL not configured yet"
-    echo "   For now, manually copy the claude-bot directory to $INSTALL_DIR"
-    exit 1
+    rm -rf claude-bot
+    git clone https://github.com/labcart/claude-bot.git
+    cd claude-bot
 fi
 
 # Install dependencies
@@ -155,7 +154,7 @@ echo ""
 # Ask user how they want to run it
 read -p "Start server now? (y/n) " -n 1 -r
 echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if [[ \$REPLY =~ ^[Yy]\$ ]]; then
     echo "Starting server..."
     npm run start
 else
@@ -163,7 +162,7 @@ else
     echo "✅ Installation complete!"
     echo ""
     echo "To start the server later, run:"
-    echo "   cd $INSTALL_DIR/claude-bot"
+    echo "   cd \$INSTALL_DIR/claude-bot"
     echo "   npm run start"
 fi
 `;

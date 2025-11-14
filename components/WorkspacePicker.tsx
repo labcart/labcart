@@ -65,10 +65,10 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
         const folderName = dirHandle.name;
 
         console.log(`📁 Selected folder: "${folderName}"`);
-        console.log('🔍 Resolving full path...');
+        console.log('🔍 Resolving full path via bot server...');
 
-        // Call backend to resolve folder name to full path
-        const response = await fetch('/api/workspace/resolve', {
+        // Call bot server to resolve folder name to full path
+        const response = await fetch('http://localhost:3010/resolve-workspace', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ folderName }),
@@ -76,7 +76,7 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
 
         const data = await response.json();
 
-        if (response.ok && data.success) {
+        if (response.ok && data.path) {
           console.log(`✅ Resolved to: ${data.path}`);
           setSelectedPath(data.path);
           onWorkspaceSelected(data.path);
