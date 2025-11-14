@@ -77,7 +77,7 @@ export async function GET(
 
 function generateInstallScript(userId: string, serverId: string | null): string {
   const coordinationUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const serverIdValue = serverId || `server-$(hostname)`;
+  const serverIdValue = serverId || 'server-$(hostname)';
 
   return `#!/bin/bash
 set -e
@@ -93,7 +93,7 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-echo "✅ Node.js found: $(node --version)"
+echo "✅ Node.js found: \$(node --version)"
 echo ""
 
 # Check if git is installed
@@ -106,11 +106,11 @@ echo "✅ Git found"
 echo ""
 
 # Create install directory
-INSTALL_DIR="$HOME/.labcart"
-mkdir -p "$INSTALL_DIR"
-cd "$INSTALL_DIR"
+INSTALL_DIR="\$HOME/.labcart"
+mkdir -p "\$INSTALL_DIR"
+cd "\$INSTALL_DIR"
 
-echo "📦 Installing to: $INSTALL_DIR"
+echo "📦 Installing to: \$INSTALL_DIR"
 echo ""
 
 # Clone or update the bot server repository
@@ -151,19 +151,13 @@ echo "   To run in background: npm run start &"
 echo "   To run with logs:      npm run start"
 echo ""
 
-# Ask user how they want to run it
-read -p "Start server now? (y/n) " -n 1 -r
-echo
-if [[ \$REPLY =~ ^[Yy]\$ ]]; then
-    echo "Starting server..."
-    npm run start
-else
-    echo ""
-    echo "✅ Installation complete!"
-    echo ""
-    echo "To start the server later, run:"
-    echo "   cd \$INSTALL_DIR/claude-bot"
-    echo "   npm run start"
-fi
+# Installation complete - server installed successfully
+echo ""
+echo "✅ Installation complete!"
+echo ""
+echo "To start the server, run:"
+echo "   cd \$INSTALL_DIR/claude-bot"
+echo "   npm run start"
+echo ""
 `;
 }
