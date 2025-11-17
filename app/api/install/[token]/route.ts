@@ -151,20 +151,38 @@ echo ""
 echo "🤖 Initializing bots..."
 node scripts/init-bots.js
 
-# Start the server
-echo "🚀 Starting bot server..."
+# Install PM2 if not already installed
 echo ""
-echo "   To run in background: npm run start &"
-echo "   To run with logs:      npm run start"
-echo ""
+echo "📦 Installing PM2 process manager..."
+if ! command -v pm2 &> /dev/null; then
+    npm install -g pm2
+    echo "✅ PM2 installed"
+else
+    echo "✅ PM2 already installed"
+fi
 
-# Installation complete - server installed successfully
+# Stop any existing PM2 process
+pm2 delete labcart-bot 2>/dev/null || true
+
+# Start the server with PM2
+echo ""
+echo "🚀 Starting bot server with PM2..."
+pm2 start server.js --name labcart-bot --log logs/pm2.log --time
+
+# Save PM2 process list
+pm2 save
+
 echo ""
 echo "✅ Installation complete!"
 echo ""
-echo "To start the server, run:"
-echo "   cd \$INSTALL_DIR/claude-bot"
-echo "   npm run start"
+echo "🎉 Bot server is running!"
+echo ""
+echo "📋 Management commands:"
+echo "   pm2 status              # View server status"
+echo "   pm2 logs labcart-bot    # View logs"
+echo "   pm2 restart labcart-bot # Restart server"
+echo "   pm2 stop labcart-bot    # Stop server"
+echo "   pm2 delete labcart-bot  # Remove from PM2"
 echo ""
 `;
 }
