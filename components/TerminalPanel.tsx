@@ -18,7 +18,7 @@ interface TerminalPanelProps {
 
 export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps) {
   const [terminals, setTerminals] = useState<Terminal[]>([
-    { id: 'terminal-1', name: 'bash', cwd: defaultCwd }
+    { id: 'terminal-1', name: 'bash', cwd: defaultCwd || '/' }
   ]);
   const [activeTerminalId, setActiveTerminalId] = useState('terminal-1');
   const [editingTerminalId, setEditingTerminalId] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps
     setTerminals([...terminals, {
       id: newId,
       name: 'bash',
-      cwd: defaultCwd
+      cwd: defaultCwd || '/'
     }]);
     setActiveTerminalId(newId);
   };
