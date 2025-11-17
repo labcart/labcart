@@ -151,26 +151,16 @@ echo ""
 echo "🤖 Initializing bots..."
 node scripts/init-bots.js
 
-# Install PM2 if not already installed
-echo ""
-echo "📦 Installing PM2 process manager..."
-if ! command -v pm2 &> /dev/null; then
-    npm install -g pm2
-    echo "✅ PM2 installed"
-else
-    echo "✅ PM2 already installed"
-fi
-
 # Stop any existing PM2 process
-pm2 delete labcart-bot 2>/dev/null || true
+npx pm2 delete labcart-bot 2>/dev/null || true
 
 # Start the server with PM2
 echo ""
 echo "🚀 Starting bot server with PM2..."
-pm2 start server.js --name labcart-bot --log logs/pm2.log --time
+npx pm2 start server.js --name labcart-bot --log logs/pm2.log --time
 
 # Save PM2 process list
-pm2 save
+npx pm2 save
 
 echo ""
 echo "✅ Installation complete!"
@@ -178,11 +168,11 @@ echo ""
 echo "🎉 Bot server is running!"
 echo ""
 echo "📋 Management commands:"
-echo "   pm2 status              # View server status"
-echo "   pm2 logs labcart-bot    # View logs"
-echo "   pm2 restart labcart-bot # Restart server"
-echo "   pm2 stop labcart-bot    # Stop server"
-echo "   pm2 delete labcart-bot  # Remove from PM2"
+echo "   npx pm2 status              # View server status"
+echo "   npx pm2 logs labcart-bot    # View logs"
+echo "   npx pm2 restart labcart-bot # Restart server"
+echo "   npx pm2 stop labcart-bot    # Stop server"
+echo "   npx pm2 delete labcart-bot  # Remove from PM2"
 echo ""
 `;
 }
