@@ -16,7 +16,7 @@ interface TerminalPanelProps {
   defaultCwd?: string;
 }
 
-export default function TerminalPanel({ socket, defaultCwd = process.env.LABCART_WORKSPACE || process.cwd() }: TerminalPanelProps) {
+export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps) {
   const [terminals, setTerminals] = useState<Terminal[]>([
     { id: 'terminal-1', name: 'bash', cwd: defaultCwd }
   ]);

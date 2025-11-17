@@ -97,7 +97,7 @@ export function useTerminal(options: UseTerminalOptions) {
       console.log(`🖥️  Requesting terminal creation: ${terminalId}`);
       socket.emit('terminal:create', {
         terminalId,
-        cwd: cwd || process.env.LABCART_WORKSPACE || process.cwd(), // Dynamic workspace
+        cwd: cwd, // Workspace path from parent component
         cols: term.cols,
         rows: term.rows,
         botId,

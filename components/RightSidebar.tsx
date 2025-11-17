@@ -310,7 +310,7 @@ export default function RightSidebar({
       </div>
 
       {/* Terminal Panel - Fixed at bottom, outside scrollable area */}
-      {showTerminal && <TerminalPanel socket={socket} />}
+      {showTerminal && <TerminalPanel socket={socket} defaultCwd={workspacePath} />}
       </>
       )}
     </div>
