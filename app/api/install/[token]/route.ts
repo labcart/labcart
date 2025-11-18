@@ -189,21 +189,21 @@ cd services/mcp-router && npm install && cd ../..
 # Start services if not already running (shared across installations)
 if ! curl -s http://localhost:3001/health > /dev/null 2>&1; then
   echo "🚀 Starting TTS service..."
-  npx pm2 start services/tts-http-service/index.js --name tts-service
+  npx pm2 start services/tts-http-service/index.js --name tts-service --cwd services/tts-http-service
 else
   echo "✅ TTS service already running (shared)"
 fi
 
 if ! curl -s http://localhost:3002/health > /dev/null 2>&1; then
   echo "🚀 Starting Image Gen service..."
-  npx pm2 start services/image-gen-http-service/index.js --name image-service
+  npx pm2 start services/image-gen-http-service/index.js --name image-service --cwd services/image-gen-http-service
 else
   echo "✅ Image Gen service already running (shared)"
 fi
 
 if ! curl -s http://localhost:3003/health > /dev/null 2>&1; then
   echo "🚀 Starting Chat Context service..."
-  npx pm2 start services/chat-context-http-service/index.js --name chat-service
+  npx pm2 start services/chat-context-http-service/index.js --name chat-service --cwd services/chat-context-http-service
 else
   echo "✅ Chat Context service already running (shared)"
 fi
