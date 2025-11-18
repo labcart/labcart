@@ -151,7 +151,38 @@ echo ""
 echo "🤖 Initializing bots..."
 node scripts/init-bots.js
 
-# Stop any existing PM2 process
+# Install and start HTTP services
+echo ""
+echo "📦 Setting up HTTP services..."
+
+# Install service dependencies
+cd services/tts-http-service && npm install && cd ../..
+cd services/image-gen-http-service && npm install && cd ../..
+cd services/chat-context-http-service && npm install && cd ../..
+
+# Start services if not already running (shared across installations)
+if ! curl -s http://localhost:3001/health > /dev/null 2>&1; then
+  echo "🚀 Starting TTS service..."
+  npx pm2 start services/tts-http-service/index.js --name tts-service
+else
+  echo "✅ TTS service already running (shared)"
+fi
+
+if ! curl -s http://localhost:3002/health > /dev/null 2>&1; then
+  echo "🚀 Starting Image Gen service..."
+  npx pm2 start services/image-gen-http-service/index.js --name image-service
+else
+  echo "✅ Image Gen service already running (shared)"
+fi
+
+if ! curl -s http://localhost:3003/health > /dev/null 2>&1; then
+  echo "🚀 Starting Chat Context service..."
+  npx pm2 start services/chat-context-http-service/index.js --name chat-service
+else
+  echo "✅ Chat Context service already running (shared)"
+fi
+
+# Stop any existing PM2 bot process
 npx pm2 delete labcart-bot 2>/dev/null || true
 
 # Start the server with PM2
