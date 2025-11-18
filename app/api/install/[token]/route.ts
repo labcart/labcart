@@ -155,10 +155,36 @@ node scripts/init-bots.js
 echo ""
 echo "📦 Setting up HTTP services..."
 
+# Generate .env files from templates (using environment variables if available)
+echo "🔧 Generating service .env files..."
+
+# TTS Service .env
+cat > services/tts-http-service/.env <<ENV_EOF
+TTS_HTTP_PORT=3001
+OPENAI_API_KEY=\${OPENAI_API_KEY:-sk-proj-placeholder}
+GOOGLE_APPLICATION_CREDENTIALS=\${GOOGLE_APPLICATION_CREDENTIALS:-}
+ELEVENLABS_API_KEY=\${ELEVENLABS_API_KEY:-}
+ENV_EOF
+
+# Image Gen Service .env
+cat > services/image-gen-http-service/.env <<ENV_EOF
+IMAGE_HTTP_PORT=3002
+OPENAI_API_KEY=\${OPENAI_API_KEY:-sk-proj-placeholder}
+ENV_EOF
+
+# Chat Context Service .env
+cat > services/chat-context-http-service/.env <<ENV_EOF
+CHAT_CONTEXT_HTTP_PORT=3003
+ENV_EOF
+
+echo "✅ Service .env files generated"
+echo "⚠️  Note: Set OPENAI_API_KEY, ELEVENLABS_API_KEY environment variables before installation for full functionality"
+
 # Install service dependencies
 cd services/tts-http-service && npm install && cd ../..
 cd services/image-gen-http-service && npm install && cd ../..
 cd services/chat-context-http-service && npm install && cd ../..
+cd services/mcp-router && npm install && cd ../..
 
 # Start services if not already running (shared across installations)
 if ! curl -s http://localhost:3001/health > /dev/null 2>&1; then
