@@ -180,11 +180,22 @@ ENV_EOF
 echo "✅ Service .env files generated"
 echo "⚠️  Note: Set OPENAI_API_KEY, ELEVENLABS_API_KEY environment variables before installation for full functionality"
 
+# Install MCP Router globally (if not already installed)
+if [ ! -d "\$HOME/mcp-router" ]; then
+  echo "🔀 Installing MCP Router to ~/mcp-router..."
+  cp -r mcp-router "\$HOME/mcp-router"
+  cd "\$HOME/mcp-router"
+  npm install
+  cd "\$INSTALL_DIR/claude-bot"
+  echo "✅ MCP Router installed globally"
+else
+  echo "✅ MCP Router already installed at ~/mcp-router (shared)"
+fi
+
 # Install service dependencies
 cd services/tts-http-service && npm install && cd ../..
 cd services/image-gen-http-service && npm install && cd ../..
 cd services/chat-context-http-service && npm install && cd ../..
-cd services/mcp-router && npm install && cd ../..
 
 # Start services if not already running (shared across installations)
 if ! curl -s http://localhost:3001/health > /dev/null 2>&1; then
