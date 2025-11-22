@@ -235,9 +235,9 @@ const useTabStore = create<TabStore>()(
       },
 
       /**
-       * Set user ID (from localStorage on app init)
+       * Set user ID (from Supabase auth on app init)
        */
-      setUserId: (userId: number) => {
+      setUserId: (userId: string) => {
         set({ userId });
       },
 
@@ -482,7 +482,8 @@ const useTabStore = create<TabStore>()(
             activeTabId: state.activeTabId,
           };
 
-          const response = await fetch('/api/workspace/state', {
+          const { apiFetch } = await import('@/lib/api-client');
+          const response = await apiFetch('/api/workspace/state', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

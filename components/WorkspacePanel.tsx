@@ -50,7 +50,7 @@ export default function WorkspacePanel() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [messageQueue, setMessageQueue] = useState<Array<{botId: string, userId: number, text: string}>>([]);
+  const [messageQueue, setMessageQueue] = useState<Array<{botId: string, userId: string, text: string}>>([]);
   const [connectionTimeout, setConnectionTimeout] = useState(false);
   const [connected, setConnected] = useState(false);
   const [fileContent, setFileContent] = useState<string>('');
@@ -170,7 +170,7 @@ export default function WorkspacePanel() {
   }, [connected, messageQueue, socket, getActiveTab, addMessageToTab]);
 
   // ========================================================================
-  // User ID Initialization - Use Supabase User ID
+  // User ID Initialization - Use Supabase User UUID
   // ========================================================================
 
   useEffect(() => {
@@ -179,25 +179,18 @@ export default function WorkspacePanel() {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user?.id) {
-        // Hash the UUID to a numeric ID (stable across sessions)
-        // Use a simple hash function that converts UUID to consistent integer
-        const numericId = parseInt(
-          session.user.id
-            .split('')
-            .reduce((acc, char) => acc + char.charCodeAt(0), 0)
-            .toString()
-            .slice(0, 9)
-        );
+        // Use the raw UUID string (no hashing) to match bot server USER_ID
+        const userUuid = session.user.id;
 
-        console.log(`🔐 User ID from Supabase: ${session.user.id} → ${numericId}`);
-        setUserId(numericId);
-        localStorage.setItem('labcart-user-id', numericId.toString());
+        console.log(`🔐 User ID from Supabase: ${userUuid}`);
+        setUserId(userUuid);
+        localStorage.setItem('labcart-user-id', userUuid);
       } else {
         console.warn('⚠️  No Supabase session found, falling back to localStorage');
         // Fallback: check localStorage
         const storedId = localStorage.getItem('labcart-user-id');
         if (storedId) {
-          setUserId(parseInt(storedId));
+          setUserId(storedId);
         }
       }
     };
@@ -239,7 +232,7 @@ export default function WorkspacePanel() {
   // ========================================================================
 
   useEffect(() => {
-    const handleBotMessage = (data: { botId: string; userId: number; message: string; sessionUuid?: string; timestamp: number }) => {
+    const handleBotMessage = (data: { botId: string; userId: string; message: string; sessionUuid?: string; timestamp: number }) => {
       const targetTab = tabs.find(tab => tab.type === 'chat' && tab.botId === data.botId);
 
       if (targetTab && targetTab.type === 'chat') {
@@ -329,7 +322,8 @@ export default function WorkspacePanel() {
   const saveFile = async (filePath: string, content: string) => {
     setSavingFile(true);
     try {
-      const response = await fetch('/api/files/save', {
+      const { apiFetch } = await import('@/lib/api-client');
+      const response = await apiFetch('/api/files/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

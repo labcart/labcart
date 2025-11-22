@@ -26,7 +26,7 @@ export interface Message {
 export interface Session {
   uuid: string;
   botId: string;
-  userId: number;
+  userId: string;
   messageCount: number;
   createdAt: string;
   updatedAt?: string;
@@ -77,7 +77,7 @@ export interface MessagesResponse {
 
 export interface NewSessionRequest {
   botId: string;
-  userId: number;
+  userId: string;
 }
 
 export interface NewSessionResponse {
@@ -87,7 +87,7 @@ export interface NewSessionResponse {
 
 export interface SwitchSessionRequest {
   botId: string;
-  userId: number;
+  userId: string;
   sessionUuid: string;
 }
 
@@ -99,13 +99,13 @@ export interface SwitchSessionResponse {
 
 export interface SendMessageRequest {
   botId: string;
-  userId: number;
+  userId: string;
   message: string;
 }
 
 export interface BotMessageEvent {
   botId: string;
-  userId: number;
+  userId: string;
   message: string;
   timestamp: number;
 }
@@ -118,7 +118,7 @@ export interface TabStore {
   // State
   tabs: Tab[];
   activeTabId: string | null;
-  userId: number | null;
+  userId: string | null;
   hasInitialized: boolean;
   workspacePath: string | null;
   botServerUrl: string; // URL of the bot server to connect to
@@ -137,7 +137,7 @@ export interface TabStore {
   addFileTab: (filePath: string) => void;
 
   // Common Actions
-  setUserId: (userId: number) => void;
+  setUserId: (userId: string) => void;
   getActiveTab: () => Tab | null;
   validateTabs: () => Promise<void>;
   initializeDefaultTab: () => void;
