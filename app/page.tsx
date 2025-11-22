@@ -17,7 +17,7 @@ export default function Home() {
   const [showRightSidebar, setShowRightSidebar] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const { validateTabs, userId, tabs, addFileTab, initializeDefaultTab, setWorkspacePath: setTabStoreWorkspace } = useTabStore();
+  const { validateTabs, userId, tabs, addFileTab, initializeDefaultTab, setWorkspacePath: setTabStoreWorkspace, setBotServerUrl } = useTabStore();
   const { isFirstRun, workspacePath, setWorkspacePath } = useWorkspaceStore();
 
   // Check authentication on mount
@@ -29,6 +29,9 @@ export default function Home() {
         router.push('/login');
       } else {
         setIsAuthenticated(true);
+
+        // Fetch user's bot servers and set the URL
+        await fetchBotServerUrl(session.access_token);
       }
       setIsCheckingAuth(false);
     };
@@ -36,16 +39,46 @@ export default function Home() {
     checkAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!session) {
         router.push('/login');
       } else {
         setIsAuthenticated(true);
+        // Fetch bot server URL on auth change
+        await fetchBotServerUrl(session.access_token);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [router]);
+
+  // Fetch user's bot server URL
+  const fetchBotServerUrl = async (token: string) => {
+    try {
+      const { apiFetch } = await import('@/lib/api-client');
+      const response = await apiFetch('/api/servers', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Find first online server
+        const onlineServer = data.servers?.find((s: any) => s.status === 'online');
+
+        if (onlineServer && onlineServer.server_url) {
+          console.log(`🔧 Setting bot server URL from registration: ${onlineServer.server_url}`);
+          setBotServerUrl(onlineServer.server_url);
+        } else {
+          console.log('⚠️ No online bot servers found, using localhost:3010');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching bot server URL:', error);
+    }
+  };
 
   // Initialize default tab and validate persisted tabs on mount
   useEffect(() => {
@@ -72,7 +105,8 @@ export default function Home() {
   const handleWorkspaceSelected = async (path: string) => {
     try {
       // Call backend to identify or create workspace
-      const response = await fetch('/api/workspace/identify', {
+      const { apiFetch } = await import('@/lib/api-client');
+      const response = await apiFetch('/api/workspace/identify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspacePath: path }),

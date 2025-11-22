@@ -130,13 +130,66 @@ echo ""
 echo "📦 Installing dependencies..."
 npm install
 
-# Create .env file with pre-configured settings
+# Install Cloudflare Tunnel
 echo ""
-echo "⚙️  Configuring bot server..."
+echo "🌐 Installing Cloudflare Tunnel..."
+if ! command -v cloudflared &> /dev/null; then
+    # Detect architecture
+    ARCH=\$(uname -m)
+    if [ "\$ARCH" = "x86_64" ]; then
+        CF_ARCH="amd64"
+    elif [ "\$ARCH" = "aarch64" ] || [ "\$ARCH" = "arm64" ]; then
+        CF_ARCH="arm64"
+    else
+        CF_ARCH="amd64"  # fallback
+    fi
+
+    echo "   Downloading cloudflared for \$CF_ARCH..."
+    curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-\$CF_ARCH" -o cloudflared
+    chmod +x cloudflared
+    sudo mv cloudflared /usr/local/bin/ 2>/dev/null || mv cloudflared \$HOME/.local/bin/cloudflared
+    echo "✅ Cloudflared installed"
+else
+    echo "✅ Cloudflared already installed"
+fi
+
+# Create temporary .env with placeholder
 cat > .env << EOF
 # Auto-configured by LabCart Install
 USER_ID=${userId}
 SERVER_ID=${serverIdValue}
+SERVER_URL=https://placeholder.trycloudflare.com
+COORDINATION_URL=${coordinationUrl}/api/servers/register
+HTTP_PORT=3010
+NEXT_PUBLIC_SUPABASE_URL=https://maaotshzykjncoifrbmj.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hYW90c2h6eWtqbmNvaWZyYm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyMDM1OTUsImV4cCI6MjA3Nzc3OTU5NX0.gtv5duMO1_eRsDkuzrMIWqSira1CnnImQagGTEXepVs
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hYW90c2h6eWtqbmNvaWZyYm1qIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjIwMzU5NSwiZXhwIjoyMDc3Nzc5NTk1fQ.AHec7PwTI21iaiHVG2pBAfXWUwbocvlM4aok-AxKzF0
+EOF
+
+# Start Cloudflare Tunnel with PM2
+echo ""
+echo "🚀 Starting Cloudflare Tunnel..."
+npx pm2 delete labcart-tunnel 2>/dev/null || true
+npx pm2 start cloudflared --name labcart-tunnel -- tunnel --url http://localhost:3010 --no-autoupdate
+echo "⏳ Waiting for tunnel URL..."
+sleep 5
+
+# Extract tunnel URL from PM2 logs
+TUNNEL_URL=\$(npx pm2 logs labcart-tunnel --nostream --lines 50 2>/dev/null | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1)
+
+if [ -z "\$TUNNEL_URL" ]; then
+    echo "⚠️  Warning: Could not detect tunnel URL. Using placeholder."
+    TUNNEL_URL="https://placeholder.trycloudflare.com"
+else
+    echo "✅ Tunnel URL: \$TUNNEL_URL"
+fi
+
+# Update .env with actual tunnel URL
+cat > .env << EOF
+# Auto-configured by LabCart Install
+USER_ID=${userId}
+SERVER_ID=${serverIdValue}
+SERVER_URL=\$TUNNEL_URL
 COORDINATION_URL=${coordinationUrl}/api/servers/register
 HTTP_PORT=3010
 NEXT_PUBLIC_SUPABASE_URL=https://maaotshzykjncoifrbmj.supabase.co
@@ -234,13 +287,16 @@ echo ""
 echo "✅ Installation complete!"
 echo ""
 echo "🎉 Bot server is running!"
+echo "🌐 Tunnel URL: \$TUNNEL_URL"
 echo ""
 echo "📋 Management commands:"
-echo "   npx pm2 status              # View server status"
-echo "   npx pm2 logs labcart-bot    # View logs"
-echo "   npx pm2 restart labcart-bot # Restart server"
-echo "   npx pm2 stop labcart-bot    # Stop server"
-echo "   npx pm2 delete labcart-bot  # Remove from PM2"
+echo "   npx pm2 status                   # View all services"
+echo "   npx pm2 logs labcart-bot         # View bot logs"
+echo "   npx pm2 logs labcart-tunnel      # View tunnel logs"
+echo "   npx pm2 restart labcart-bot      # Restart bot server"
+echo "   npx pm2 restart labcart-tunnel   # Restart tunnel"
+echo "   npx pm2 stop labcart-bot         # Stop bot server"
+echo "   npx pm2 delete labcart-bot       # Remove bot from PM2"
 echo ""
 `;
 }

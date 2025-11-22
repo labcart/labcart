@@ -6,6 +6,7 @@ import ContextMenu, { ContextMenuSection } from './ContextMenu';
 import Toast, { ToastType } from './Toast';
 import ConfirmDialog from './ConfirmDialog';
 import useWorkspaceStore from '@/store/workspaceStore';
+import useTabStore from '@/store/tabStore';
 
 interface FileNode {
   name: string;
@@ -22,6 +23,7 @@ interface FileExplorerProps {
 
 export default function FileExplorer({ onFileClick }: FileExplorerProps) {
   const { workspacePath } = useWorkspaceStore();
+  const { userId } = useTabStore();
   const [rootFiles, setRootFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -37,12 +39,13 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
   const [clipboard, setClipboard] = useState<{ paths: string[]; operation: 'cut' | 'copy' } | null>(null);
 
   useEffect(() => {
-    if (!workspacePath) return;
+    if (!workspacePath || !userId) return;
 
     loadDirectory(workspacePath);
 
-    // Set up file system watcher for auto-refresh (via bot server)
-    const eventSource = new EventSource('http://localhost:3010/files/watch?path=' + encodeURIComponent(workspacePath) + '&workspace=' + encodeURIComponent(workspacePath));
+    // Set up file system watcher for auto-refresh (via proxy)
+    const proxyUrl = 'https://ide-ws.labcart.io';
+    const eventSource = new EventSource(`${proxyUrl}/proxy/files/watch?userId=${userId}&path=` + encodeURIComponent(workspacePath) + '&workspace=' + encodeURIComponent(workspacePath));
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -61,7 +64,7 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     return () => {
       eventSource.close();
     };
-  }, [workspacePath]);
+  }, [workspacePath, userId]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -143,7 +146,10 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
 
   const loadDirectory = async (dirPath: string) => {
     try {
-      const response = await fetch(`http://localhost:3010/files?path=${encodeURIComponent(dirPath)}&workspace=${encodeURIComponent(workspacePath)}`);
+      if (!userId) return [];
+
+      const proxyUrl = 'https://ide-ws.labcart.io';
+      const response = await fetch(`${proxyUrl}/proxy/files?userId=${userId}&path=${encodeURIComponent(dirPath)}&workspace=${encodeURIComponent(workspacePath)}`);
       const data = await response.json();
 
       if (!response.ok || !data.files) {
@@ -297,7 +303,8 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     }
 
     try {
-      const response = await fetch('/api/files/rename', {
+      const { apiFetch } = await import('@/lib/api-client');
+      const response = await apiFetch('/api/files/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ oldPath: renamingPath, newName })
@@ -328,7 +335,8 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
         setConfirmDialog(null);
 
         try {
-          const response = await fetch('/api/files/delete', {
+          const { apiFetch } = await import('@/lib/api-client');
+          const response = await apiFetch('/api/files/delete', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filePath: path })
@@ -365,9 +373,10 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
         let successCount = 0;
         let errorCount = 0;
 
+        const { apiFetch } = await import('@/lib/api-client');
         for (const path of selectedFiles) {
           try {
-            const response = await fetch('/api/files/delete', {
+            const response = await apiFetch('/api/files/delete', {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ filePath: path })
@@ -402,7 +411,8 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     if (!name?.trim()) return;
 
     try {
-      const response = await fetch('/api/files/create', {
+      const { apiFetch } = await import('@/lib/api-client');
+      const response = await apiFetch('/api/files/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ parentPath, name: name.trim(), type })

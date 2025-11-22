@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FolderOpen, Check, AlertCircle } from 'lucide-react';
+import useTabStore from '@/store/tabStore';
 
 interface WorkspacePickerProps {
   onWorkspaceSelected: (path: string) => void;
@@ -22,6 +23,7 @@ interface WorkspacePickerProps {
  * 3. Firefox/Fallback: Manual path input
  */
 export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePickerProps) {
+  const { userId, botServerUrl } = useTabStore();
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [manualPath, setManualPath] = useState<string>('');
   const [isElectron, setIsElectron] = useState(false);
@@ -65,33 +67,41 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
         const folderName = dirHandle.name;
 
         console.log(`📁 Selected folder: "${folderName}"`);
-        console.log('🔍 Resolving full path via bot server...');
 
         // Call bot server to resolve folder name to full path
-        const response = await fetch('http://localhost:3010/resolve-workspace', {
+        if (!userId) {
+          throw new Error('User ID not available');
+        }
+
+        if (!botServerUrl) {
+          throw new Error('Bot server URL not available');
+        }
+
+        const response = await fetch(`${botServerUrl}/resolve-workspace`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ folderName }),
         });
 
-        const data = await response.json();
-
-        if (response.ok && data.path) {
-          console.log(`✅ Resolved to: ${data.path}`);
-          setSelectedPath(data.path);
-          onWorkspaceSelected(data.path);
-        } else {
-          console.error('Failed to resolve path:', data);
-          setError(data.message || 'Could not find the selected folder. Please try manual input.');
-          setShowManualInput(true);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to resolve workspace path');
         }
+
+        const data = await response.json();
+        const fullPath = data.path;
+
+        console.log(`✅ Resolved to: ${fullPath}`);
+
+        setSelectedPath(fullPath);
+        onWorkspaceSelected(fullPath);
       } catch (error: any) {
         // User cancelled or picker failed
         if (error.name === 'AbortError') {
           console.log('User cancelled folder selection');
         } else {
           console.error('Error with folder picker:', error);
-          setError('Failed to open folder picker. Please try manual input.');
+          setError('Failed to resolve workspace path. Please try manual input.');
           setShowManualInput(true);
         }
       }

@@ -22,10 +22,11 @@ export default function LoginPage() {
 
   const handleGitHubLogin = async () => {
     setLoading(true);
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}${basePath}/auth/callback`,
         skipBrowserRedirect: false,
         queryParams: {
           prompt: 'select_account',
@@ -63,7 +64,8 @@ export default function LoginPage() {
         return;
       }
 
-      const response = await fetch('/api/install/generate', {
+      const { apiFetch } = await import('@/lib/api-client');
+      const response = await apiFetch('/api/install/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

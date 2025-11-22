@@ -11,7 +11,8 @@ export default function MigratePage() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/migrate-bots', {
+      const { apiFetch } = await import('@/lib/api-client');
+      const response = await apiFetch('/api/migrate-bots', {
         method: 'POST',
       });
 

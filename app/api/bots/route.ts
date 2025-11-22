@@ -110,8 +110,8 @@ export async function POST(request: NextRequest) {
         name: platformBot.name,
         description: platformBot.description,
         system_prompt: platformBot.system_prompt,
-        creator_id: platformBot.creator_id, // Keep original creator
-        user_id: userId, // But assign to this user
+        // creator_id: platformBot.creator_id, // REMOVED: Not needed for bot server instances
+        user_id: userId, // Assign to this user
         server_id: serverId,
         is_platform_bot: false, // This is now a user instance
         is_public: false,
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
         name,
         description,
         system_prompt: systemPrompt,
-        creator_id: userId,
+        // creator_id: userId, // REMOVED: Bot server instances don't need creator_id
         user_id: userId,
         server_id: serverId,
         is_platform_bot: false,
