@@ -104,9 +104,16 @@ export default function Home() {
 
   const handleWorkspaceSelected = async (path: string) => {
     try {
-      // Call backend to identify or create workspace
-      const { apiFetch } = await import('@/lib/api-client');
-      const response = await apiFetch('/api/workspace/identify', {
+      // Call bot server to identify or create workspace
+      const botUrl = useTabStore.getState().botServerUrl;
+      if (!botUrl) {
+        console.warn('⚠️ No bot server URL, setting workspace path only');
+        setWorkspacePath(path);
+        setTabStoreWorkspace(path);
+        return;
+      }
+
+      const response = await fetch(`${botUrl}/workspace/identify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspacePath: path }),
