@@ -200,6 +200,12 @@ EOF
 echo "✅ Configuration saved to .env"
 echo ""
 
+# Create labcart-projects directory for workspaces
+echo "📁 Creating workspaces directory..."
+mkdir -p "\$HOME/labcart-projects"
+echo "✅ Workspaces directory created at ~/labcart-projects"
+echo ""
+
 # Initialize bots from brain files
 echo "🤖 Initializing bots..."
 node scripts/init-bots.js

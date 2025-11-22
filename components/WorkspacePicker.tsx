@@ -1,118 +1,117 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FolderOpen, Check, AlertCircle } from 'lucide-react';
+import { FolderOpen, Github, Loader2, AlertCircle, FolderGit2 } from 'lucide-react';
 import useTabStore from '@/store/tabStore';
 
 interface WorkspacePickerProps {
   onWorkspaceSelected: (path: string) => void;
 }
 
+interface Workspace {
+  name: string;
+  path: string;
+  isGitRepo: boolean;
+  lastModified: string;
+}
+
 /**
- * WorkspacePicker - Modal for selecting workspace folder
+ * WorkspacePicker - Cloud IDE workspace selector
  *
- * Displays on first run or when user needs to change workspace.
- * Matches conductor.build minimal macOS aesthetic.
+ * Two modes:
+ * 1. Existing Projects - Browse ~/labcart-projects/ on the VPS
+ * 2. Clone Repo - Clone a GitHub repo to the VPS
  *
- * Works in three modes:
- * 1. Electron: Native folder picker via IPC (returns full path directly)
- * 2. Chrome/Edge: File System Access API + backend path resolution
- *    - User picks folder with native browser picker
- *    - Browser returns folder name only (e.g., "labcart")
- *    - Backend resolves to full path (e.g., "/Users/macbook/play/lab/labcart")
- * 3. Firefox/Fallback: Manual path input
+ * This component works for REMOTE VPS installations. For local installations,
+ * the bot server should be running on localhost.
  */
 export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePickerProps) {
   const { userId, botServerUrl } = useTabStore();
-  const [selectedPath, setSelectedPath] = useState<string>('');
-  const [manualPath, setManualPath] = useState<string>('');
-  const [isElectron, setIsElectron] = useState(false);
-  const [showManualInput, setShowManualInput] = useState(false);
-  const [supportsFileSystemAccess, setSupportsFileSystemAccess] = useState(false);
+  const [activeTab, setActiveTab] = useState<'existing' | 'clone'>('existing');
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [repoUrl, setRepoUrl] = useState('');
+  const [cloning, setCloning] = useState(false);
 
+  // Fetch existing workspaces on mount
   useEffect(() => {
-    // Check if running in Electron
-    const electronCheck = typeof window !== 'undefined' && (window as any).electron !== undefined;
-    setIsElectron(electronCheck);
-
-    // Check if browser supports File System Access API
-    if (!electronCheck && typeof window !== 'undefined') {
-      const hasFileSystemAccess = 'showDirectoryPicker' in window;
-      setSupportsFileSystemAccess(hasFileSystemAccess);
-      setShowManualInput(!hasFileSystemAccess); // Only show manual input if no picker available
+    if (activeTab === 'existing') {
+      fetchWorkspaces();
     }
-  }, []);
+  }, [activeTab, botServerUrl]);
 
-  const handleOpenFolderPicker = async () => {
+  const fetchWorkspaces = async () => {
+    if (!botServerUrl) {
+      setError('Bot server not connected');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     setError('');
 
-    if (isElectron) {
-      // Electron: Use native IPC picker (returns full path directly)
-      try {
-        const path = await (window as any).electron.selectFolder();
-        if (path) {
-          setSelectedPath(path);
-          onWorkspaceSelected(path);
-        }
-      } catch (error) {
-        console.error('Error opening folder picker:', error);
-        setError('Failed to open folder picker. Please try again.');
+    try {
+      const response = await fetch(`${botServerUrl}/list-workspaces`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch workspaces');
       }
-    } else if (supportsFileSystemAccess) {
-      // Browser: Use File System Access API + backend path resolution
-      try {
-        // Open native folder picker
-        const dirHandle = await (window as any).showDirectoryPicker();
-        const folderName = dirHandle.name;
 
-        console.log(`📁 Selected folder: "${folderName}"`);
-
-        // Call bot server to resolve folder name to full path
-        if (!userId) {
-          throw new Error('User ID not available');
-        }
-
-        if (!botServerUrl) {
-          throw new Error('Bot server URL not available');
-        }
-
-        const response = await fetch(`${botServerUrl}/resolve-workspace`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderName }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to resolve workspace path');
-        }
-
-        const data = await response.json();
-        const fullPath = data.path;
-
-        console.log(`✅ Resolved to: ${fullPath}`);
-
-        setSelectedPath(fullPath);
-        onWorkspaceSelected(fullPath);
-      } catch (error: any) {
-        // User cancelled or picker failed
-        if (error.name === 'AbortError') {
-          console.log('User cancelled folder selection');
-        } else {
-          console.error('Error with folder picker:', error);
-          setError('Failed to resolve workspace path. Please try manual input.');
-          setShowManualInput(true);
-        }
-      }
+      const data = await response.json();
+      setWorkspaces(data.workspaces || []);
+    } catch (err: any) {
+      console.error('Error fetching workspaces:', err);
+      setError(err.message || 'Failed to load workspaces');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleManualPathSubmit = (e: React.FormEvent) => {
+  const handleSelectWorkspace = (workspace: Workspace) => {
+    console.log(`📂 Selected workspace: ${workspace.name}`);
+    onWorkspaceSelected(workspace.path);
+  };
+
+  const handleCloneRepo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (manualPath.trim()) {
-      setSelectedPath(manualPath);
-      onWorkspaceSelected(manualPath);
+
+    if (!repoUrl.trim()) {
+      setError('Please enter a repository URL');
+      return;
+    }
+
+    if (!botServerUrl) {
+      setError('Bot server not connected');
+      return;
+    }
+
+    setCloning(true);
+    setError('');
+
+    try {
+      const response = await fetch(`${botServerUrl}/clone-repo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoUrl: repoUrl.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to clone repository');
+      }
+
+      console.log(`✅ Successfully cloned: ${data.name}`);
+
+      // Open the newly cloned workspace
+      onWorkspaceSelected(data.path);
+
+    } catch (err: any) {
+      console.error('Error cloning repository:', err);
+      setError(err.message || 'Failed to clone repository');
+    } finally {
+      setCloning(false);
     }
   };
 
@@ -121,9 +120,9 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ backgroundColor: '#f6f6f5' }}
     >
-      {/* Welcome Card - Centered */}
+      {/* Welcome Card */}
       <div
-        className="w-full max-w-md mx-4"
+        className="w-full max-w-2xl mx-4"
         style={{
           backgroundColor: '#ffffff',
           borderRadius: '12px',
@@ -140,112 +139,165 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
             className="text-xl font-semibold"
             style={{ color: '#2c2826' }}
           >
-            Select Workspace Folder
+            Select Workspace
           </h2>
+          <p className="text-sm mt-1" style={{ color: '#7a7875' }}>
+            Choose an existing project or clone a new repository
+          </p>
         </div>
 
-        {/* Body */}
-        <div className="px-6 py-6">
-          <div className="space-y-4">
-            {/* Description */}
-            <p className="text-sm" style={{ color: '#7a7875' }}>
-              {isElectron
-                ? 'Select a folder to use as your workspace. This is where your project files and chat history will be stored.'
-                : supportsFileSystemAccess
-                ? 'Select a folder to use as your workspace. Your files remain on your computer - we only access them with your permission.'
-                : 'Your browser doesn\'t support the native folder picker. Please enter the absolute path to your workspace folder.'}
-            </p>
+        {/* Tabs */}
+        <div className="flex border-b" style={{ borderColor: '#e0e0e0' }}>
+          <button
+            onClick={() => setActiveTab('existing')}
+            className="flex-1 px-6 py-3 font-medium text-sm transition-colors"
+            style={{
+              color: activeTab === 'existing' ? '#2c2826' : '#7a7875',
+              borderBottom: activeTab === 'existing' ? '2px solid #2c2826' : '2px solid transparent',
+            }}
+          >
+            Existing Projects
+          </button>
+          <button
+            onClick={() => setActiveTab('clone')}
+            className="flex-1 px-6 py-3 font-medium text-sm transition-colors"
+            style={{
+              color: activeTab === 'clone' ? '#2c2826' : '#7a7875',
+              borderBottom: activeTab === 'clone' ? '2px solid #2c2826' : '2px solid transparent',
+            }}
+          >
+            Clone Repository
+          </button>
+        </div>
 
-            {/* Error message */}
-            {error && (
-              <div className="flex items-start gap-2 p-3 rounded-lg" style={{ backgroundColor: '#fff3cd', border: '1px solid #ffc107' }}>
-                <AlertCircle size={16} style={{ color: '#856404', marginTop: '2px' }} />
-                <span className="text-sm" style={{ color: '#856404' }}>
-                  {error}
-                </span>
-              </div>
-            )}
-
-            {(isElectron || supportsFileSystemAccess) && !showManualInput ? (
-              /* Electron or Browser with File System Access API: Native picker button */
-              <>
-                <button
-                  onClick={handleOpenFolderPicker}
-                  className="w-full px-6 py-4 rounded-lg flex items-center justify-center gap-3 transition-all duration-150 font-medium"
-                  style={{
-                    backgroundColor: '#2c2826',
-                    color: '#ffffff',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#454340';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#2c2826';
-                  }}
-                >
-                  <FolderOpen size={20} />
-                  <span>Open Folder</span>
-                </button>
-
-                {/* Selected path display */}
-                {selectedPath && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg" style={{ backgroundColor: '#f6f6f5' }}>
-                    <Check size={16} style={{ color: '#28a745' }} />
-                    <span className="font-mono text-sm" style={{ color: '#2c2826' }}>
-                      {selectedPath}
-                    </span>
-                  </div>
-                )}
-
-                {/* Manual input fallback for browsers */}
-                {!isElectron && (
-                  <button
-                    type="button"
-                    onClick={() => setShowManualInput(true)}
-                    className="text-sm underline"
-                    style={{ color: '#7a7875' }}
-                  >
-                    Enter path manually instead
-                  </button>
-                )}
-              </>
-            ) : (
-              /* Browser mode: Manual path input */
-              <form onSubmit={handleManualPathSubmit} className="space-y-4">
-                <input
-                  type="text"
-                  value={manualPath}
-                  onChange={(e) => setManualPath(e.target.value)}
-                  placeholder="/absolute/path/to/workspace"
-                  className="w-full px-4 py-3 rounded-lg font-mono text-sm"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e0e0e0',
-                    color: '#2c2826',
-                  }}
-                  autoFocus
-                />
-
-                <button
-                  type="submit"
-                  className="w-full px-6 py-3 rounded-lg flex items-center justify-center gap-3 transition-all duration-150 font-medium"
-                  style={{
-                    backgroundColor: '#2c2826',
-                    color: '#ffffff',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#454340';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#2c2826';
-                  }}
-                >
-                  <Check size={20} />
-                  <span>Select Workspace</span>
-                </button>
-              </form>
-            )}
+        {/* Error Display */}
+        {error && (
+          <div className="mx-6 mt-4 flex items-start gap-2 p-3 rounded-lg" style={{ backgroundColor: '#fff3cd', border: '1px solid #ffc107' }}>
+            <AlertCircle size={16} style={{ color: '#856404', marginTop: '2px' }} />
+            <span className="text-sm" style={{ color: '#856404' }}>
+              {error}
+            </span>
           </div>
+        )}
+
+        {/* Tab Content */}
+        <div className="px-6 py-6" style={{ minHeight: '300px' }}>
+          {activeTab === 'existing' ? (
+            /* Existing Projects Tab */
+            <div className="space-y-3">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="animate-spin mb-3" size={32} style={{ color: '#7a7875' }} />
+                  <p className="text-sm" style={{ color: '#7a7875' }}>Loading workspaces...</p>
+                </div>
+              ) : workspaces.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <FolderOpen size={48} style={{ color: '#d0d0d0', marginBottom: '12px' }} />
+                  <p className="text-sm font-medium" style={{ color: '#2c2826' }}>No workspaces found</p>
+                  <p className="text-sm mt-1" style={{ color: '#7a7875' }}>Clone a repository to get started</p>
+                </div>
+              ) : (
+                <>
+                  {workspaces.map((workspace) => (
+                    <button
+                      key={workspace.path}
+                      onClick={() => handleSelectWorkspace(workspace)}
+                      className="w-full p-4 rounded-lg flex items-center gap-3 transition-all"
+                      style={{
+                        backgroundColor: '#f6f6f5',
+                        border: '1px solid #e0e0e0',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#ebebea';
+                        e.currentTarget.style.borderColor = '#d0d0d0';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#f6f6f5';
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                      }}
+                    >
+                      {workspace.isGitRepo ? (
+                        <FolderGit2 size={20} style={{ color: '#7a7875' }} />
+                      ) : (
+                        <FolderOpen size={20} style={{ color: '#7a7875' }} />
+                      )}
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-sm" style={{ color: '#2c2826' }}>
+                          {workspace.name}
+                        </div>
+                        <div className="font-mono text-xs mt-0.5" style={{ color: '#7a7875' }}>
+                          {workspace.path}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : (
+            /* Clone Repository Tab */
+            <form onSubmit={handleCloneRepo} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: '#2c2826' }}>
+                  GitHub Repository URL
+                </label>
+                <div className="relative">
+                  <Github
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2"
+                    size={18}
+                    style={{ color: '#7a7875' }}
+                  />
+                  <input
+                    type="url"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    placeholder="https://github.com/username/repository"
+                    className="w-full pl-10 pr-4 py-3 rounded-lg font-mono text-sm"
+                    style={{
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e0e0e0',
+                      color: '#2c2826',
+                    }}
+                    disabled={cloning}
+                    autoFocus
+                  />
+                </div>
+                <p className="text-xs mt-2" style={{ color: '#7a7875' }}>
+                  The repository will be cloned to ~/labcart-projects/ on your server
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={cloning || !repoUrl.trim()}
+                className="w-full px-6 py-3 rounded-lg flex items-center justify-center gap-3 transition-all duration-150 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: '#2c2826',
+                  color: '#ffffff',
+                }}
+                onMouseEnter={(e) => {
+                  if (!cloning && repoUrl.trim()) {
+                    e.currentTarget.style.backgroundColor = '#454340';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#2c2826';
+                }}
+              >
+                {cloning ? (
+                  <>
+                    <Loader2 className="animate-spin" size={20} />
+                    <span>Cloning Repository...</span>
+                  </>
+                ) : (
+                  <>
+                    <Github size={20} />
+                    <span>Clone & Open</span>
+                  </>
+                )}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>
