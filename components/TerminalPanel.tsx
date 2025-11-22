@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Plus, RotateCw, X } from 'lucide-react';
-import { Socket } from 'socket.io-client';
+import type { ISocket } from '@/hooks/useSocket';
 import TerminalInstance from './TerminalInstance';
 
 interface Terminal {
@@ -12,7 +12,7 @@ interface Terminal {
 }
 
 interface TerminalPanelProps {
-  socket: Socket | null;
+  socket: ISocket | null;
   defaultCwd?: string;
 }
 

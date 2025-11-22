@@ -1,11 +1,11 @@
 'use client';
 
-import { Socket } from 'socket.io-client';
+import type { ISocket } from '@/hooks/useSocket';
 import { useTerminal } from '@/hooks/useTerminal';
 
 interface TerminalInstanceProps {
   terminalId: string;
-  socket: Socket | null;
+  socket: ISocket | null;
   cwd: string;
   isActive: boolean;
 }

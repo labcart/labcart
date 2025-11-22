@@ -3,8 +3,17 @@
 import { useEffect, useState } from 'react';
 import useTabStore from '@/store/tabStore';
 
+// Socket interface that works with both Socket.IO and raw WebSocket
+export interface ISocket {
+  connected: boolean;
+  on(event: string, handler: Function): void;
+  off(event: string, handler: Function): void;
+  emit(event: string, data?: any): void;
+  disconnect(): void;
+}
+
 // Create a Socket-like wrapper for raw WebSocket
-class WebSocketWrapper {
+class WebSocketWrapper implements ISocket {
   private ws: WebSocket | null = null;
   private eventHandlers: Map<string, Function[]> = new Map();
   public connected = false;

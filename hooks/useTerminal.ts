@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Socket } from 'socket.io-client';
+import type { ISocket } from './useSocket';
 
 interface UseTerminalOptions {
   terminalId: string;
-  socket: Socket | null;
+  socket: ISocket | null;
   cwd?: string;
   botId?: string;
   onReady?: () => void;
