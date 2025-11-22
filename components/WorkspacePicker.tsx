@@ -27,24 +27,21 @@ interface Workspace {
  */
 export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePickerProps) {
   const { userId, botServerUrl } = useTabStore();
-  const [activeTab, setActiveTab] = useState<'recent' | 'labcart' | 'clone'>('recent');
-  const [recentWorkspaces, setRecentWorkspaces] = useState<Workspace[]>([]);
-  const [labcartWorkspaces, setLabcartWorkspaces] = useState<Workspace[]>([]);
+  const [activeTab, setActiveTab] = useState<'existing' | 'clone'>('existing');
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [repoUrl, setRepoUrl] = useState('');
   const [cloning, setCloning] = useState(false);
 
-  // Fetch workspaces when tab changes
+  // Fetch all workspaces on mount
   useEffect(() => {
-    if (activeTab === 'recent') {
-      fetchRecentWorkspaces();
-    } else if (activeTab === 'labcart') {
-      fetchLabcartWorkspaces();
+    if (activeTab === 'existing') {
+      fetchAllWorkspaces();
     }
   }, [activeTab, botServerUrl]);
 
-  const fetchRecentWorkspaces = async () => {
+  const fetchAllWorkspaces = async () => {
     if (!botServerUrl) {
       setError('Bot server not connected');
       setLoading(false);
@@ -55,41 +52,29 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
     setError('');
 
     try {
-      const response = await fetch(`${botServerUrl}/discover-workspaces`);
+      // Fetch both discovered workspaces and labcart-projects in parallel
+      const [discoveredRes, labcartRes] = await Promise.all([
+        fetch(`${botServerUrl}/discover-workspaces`),
+        fetch(`${botServerUrl}/list-workspaces`)
+      ]);
 
-      if (!response.ok) {
-        throw new Error('Failed to discover workspaces');
-      }
+      const discovered = discoveredRes.ok ? (await discoveredRes.json()).workspaces || [] : [];
+      const labcart = labcartRes.ok ? (await labcartRes.json()).workspaces || [] : [];
 
-      const data = await response.json();
-      setRecentWorkspaces(data.workspaces || []);
-    } catch (err: any) {
-      console.error('Error discovering workspaces:', err);
-      setError(err.message || 'Failed to discover workspaces');
-    } finally {
-      setLoading(false);
-    }
-  };
+      // Merge and deduplicate by path
+      const allWorkspaces = [...discovered, ...labcart];
+      const uniqueWorkspaces = Array.from(
+        new Map(allWorkspaces.map(w => [w.path, w])).values()
+      );
 
-  const fetchLabcartWorkspaces = async () => {
-    if (!botServerUrl) {
-      setError('Bot server not connected');
-      setLoading(false);
-      return;
-    }
+      // Sort by last modified/used date
+      uniqueWorkspaces.sort((a, b) => {
+        const aDate = new Date(a.lastUsed || a.lastModified || 0);
+        const bDate = new Date(b.lastUsed || b.lastModified || 0);
+        return bDate.getTime() - aDate.getTime();
+      });
 
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch(`${botServerUrl}/list-workspaces`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch workspaces');
-      }
-
-      const data = await response.json();
-      setLabcartWorkspaces(data.workspaces || []);
+      setWorkspaces(uniqueWorkspaces);
     } catch (err: any) {
       console.error('Error fetching workspaces:', err);
       setError(err.message || 'Failed to load workspaces');
@@ -179,24 +164,14 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
         {/* Tabs */}
         <div className="flex border-b" style={{ borderColor: '#e0e0e0' }}>
           <button
-            onClick={() => setActiveTab('recent')}
+            onClick={() => setActiveTab('existing')}
             className="flex-1 px-6 py-3 font-medium text-sm transition-colors"
             style={{
-              color: activeTab === 'recent' ? '#2c2826' : '#7a7875',
-              borderBottom: activeTab === 'recent' ? '2px solid #2c2826' : '2px solid transparent',
+              color: activeTab === 'existing' ? '#2c2826' : '#7a7875',
+              borderBottom: activeTab === 'existing' ? '2px solid #2c2826' : '2px solid transparent',
             }}
           >
-            Recent Projects
-          </button>
-          <button
-            onClick={() => setActiveTab('labcart')}
-            className="flex-1 px-6 py-3 font-medium text-sm transition-colors"
-            style={{
-              color: activeTab === 'labcart' ? '#2c2826' : '#7a7875',
-              borderBottom: activeTab === 'labcart' ? '2px solid #2c2826' : '2px solid transparent',
-            }}
-          >
-            LabCart Projects
+            Existing Projects
           </button>
           <button
             onClick={() => setActiveTab('clone')}
@@ -222,75 +197,23 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
 
         {/* Tab Content */}
         <div className="px-6 py-6" style={{ minHeight: '300px' }}>
-          {activeTab === 'recent' ? (
-            /* Recent Projects Tab */
-            <div className="space-y-3">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="animate-spin mb-3" size={32} style={{ color: '#7a7875' }} />
-                  <p className="text-sm" style={{ color: '#7a7875' }}>Discovering workspaces...</p>
-                </div>
-              ) : recentWorkspaces.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <FolderOpen size={48} style={{ color: '#d0d0d0', marginBottom: '12px' }} />
-                  <p className="text-sm font-medium" style={{ color: '#2c2826' }}>No recent projects found</p>
-                  <p className="text-sm mt-1" style={{ color: '#7a7875' }}>Projects with Claude Code sessions will appear here</p>
-                </div>
-              ) : (
-                <>
-                  {recentWorkspaces.map((workspace) => (
-                    <button
-                      key={workspace.path}
-                      onClick={() => handleSelectWorkspace(workspace)}
-                      className="w-full p-4 rounded-lg flex items-center gap-3 transition-all"
-                      style={{
-                        backgroundColor: '#f6f6f5',
-                        border: '1px solid #e0e0e0',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#ebebea';
-                        e.currentTarget.style.borderColor = '#d0d0d0';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f6f6f5';
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                      }}
-                    >
-                      {workspace.isGitRepo ? (
-                        <FolderGit2 size={20} style={{ color: '#7a7875' }} />
-                      ) : (
-                        <FolderOpen size={20} style={{ color: '#7a7875' }} />
-                      )}
-                      <div className="flex-1 text-left">
-                        <div className="font-medium text-sm" style={{ color: '#2c2826' }}>
-                          {workspace.name}
-                        </div>
-                        <div className="font-mono text-xs mt-0.5" style={{ color: '#7a7875' }}>
-                          {workspace.path}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          ) : activeTab === 'labcart' ? (
-            /* LabCart Projects Tab */
+          {activeTab === 'existing' ? (
+            /* Existing Projects Tab */
             <div className="space-y-3">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader2 className="animate-spin mb-3" size={32} style={{ color: '#7a7875' }} />
                   <p className="text-sm" style={{ color: '#7a7875' }}>Loading workspaces...</p>
                 </div>
-              ) : labcartWorkspaces.length === 0 ? (
+              ) : workspaces.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <FolderOpen size={48} style={{ color: '#d0d0d0', marginBottom: '12px' }} />
-                  <p className="text-sm font-medium" style={{ color: '#2c2826' }}>No LabCart projects found</p>
+                  <p className="text-sm font-medium" style={{ color: '#2c2826' }}>No workspaces found</p>
                   <p className="text-sm mt-1" style={{ color: '#7a7875' }}>Clone a repository to get started</p>
                 </div>
               ) : (
                 <>
-                  {labcartWorkspaces.map((workspace) => (
+                  {workspaces.map((workspace) => (
                     <button
                       key={workspace.path}
                       onClick={() => handleSelectWorkspace(workspace)}
