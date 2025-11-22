@@ -294,7 +294,8 @@ export default function WorkspacePanel() {
   const loadFile = async (filePath: string) => {
     setLoadingFile(true);
     try {
-      const response = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      const { apiFetch } = await import('@/lib/api-client');
+      const response = await apiFetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
       const data = await response.json();
       setFileContent(data.content);
 
