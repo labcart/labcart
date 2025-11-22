@@ -415,8 +415,9 @@ const useTabStore = create<TabStore>()(
        */
       loadWorkspaceState: async (workspaceId: string) => {
         try {
-          // Import supabase here to avoid circular dependency
+          // Import supabase and api client here to avoid circular dependency
           const { supabase } = await import('@/lib/supabase');
+          const { apiFetch } = await import('@/lib/api-client');
 
           // Get auth session
           const { data: { session } } = await supabase.auth.getSession();
@@ -425,7 +426,7 @@ const useTabStore = create<TabStore>()(
             return;
           }
 
-          const response = await fetch(
+          const response = await apiFetch(
             `/api/workspace/state?workspaceId=${workspaceId}`,
             {
               headers: {
