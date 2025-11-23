@@ -302,6 +302,11 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
       return;
     }
 
+    if (!userId) {
+      setToast({ message: 'User not authenticated', type: 'error' });
+      return;
+    }
+
     try {
       const { proxyFetch } = await import('@/lib/proxy-client');
       const response = await proxyFetch('/rename-file', userId, {
@@ -333,6 +338,11 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
       message: `Are you sure you want to delete "${fileName}"? This action cannot be undone.`,
       onConfirm: async () => {
         setConfirmDialog(null);
+
+        if (!userId) {
+          setToast({ message: 'User not authenticated', type: 'error' });
+          return;
+        }
 
         try {
           const { proxyFetch } = await import('@/lib/proxy-client');
@@ -369,6 +379,11 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
       message: `Are you sure you want to delete: ${fileNames}? This action cannot be undone.`,
       onConfirm: async () => {
         setConfirmDialog(null);
+
+        if (!userId) {
+          setToast({ message: 'User not authenticated', type: 'error' });
+          return;
+        }
 
         let successCount = 0;
         let errorCount = 0;
@@ -409,6 +424,11 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     // TODO: Replace with inline input dialog (conductor.build style)
     const name = prompt(`Enter ${type} name:`);
     if (!name?.trim()) return;
+
+    if (!userId) {
+      setToast({ message: 'User not authenticated', type: 'error' });
+      return;
+    }
 
     try {
       const { proxyFetch } = await import('@/lib/proxy-client');
