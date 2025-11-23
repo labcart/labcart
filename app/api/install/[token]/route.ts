@@ -153,8 +153,17 @@ if ! command -v cloudflared &> /dev/null; then
     fi
 
     echo "   Downloading cloudflared for \$CF_OS-\$CF_ARCH..."
-    curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-\$CF_OS-\$CF_ARCH" -o cloudflared
-    chmod +x cloudflared
+    if [ "\$CF_OS" = "darwin" ]; then
+        # macOS releases are .tgz archives
+        curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-\$CF_OS-\$CF_ARCH.tgz" -o cloudflared.tgz
+        tar -xzf cloudflared.tgz
+        rm cloudflared.tgz
+        chmod +x cloudflared
+    else
+        # Linux releases are raw binaries
+        curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-\$CF_OS-\$CF_ARCH" -o cloudflared
+        chmod +x cloudflared
+    fi
     sudo mv cloudflared /usr/local/bin/ 2>/dev/null || mv cloudflared \$HOME/.local/bin/cloudflared
     echo "✅ Cloudflared installed"
 else
@@ -178,7 +187,7 @@ EOF
 echo ""
 echo "🚀 Starting Cloudflare Tunnel..."
 npx pm2 delete labcart-tunnel 2>/dev/null || true
-npx pm2 start cloudflared --name labcart-tunnel -- tunnel --url http://localhost:3010 --no-autoupdate
+npx pm2 start cloudflared --name labcart-tunnel --interpreter none -- tunnel --url http://localhost:3010 --no-autoupdate
 
 # Wait for tunnel URL with retry logic (max 30 seconds)
 echo "⏳ Waiting for tunnel URL..."
