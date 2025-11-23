@@ -214,10 +214,10 @@ export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUr
         )}
 
         {/* Tab Content */}
-        <div className="px-6 py-6" style={{ minHeight: '300px' }}>
+        <div className="px-6 py-6" style={{ minHeight: '300px', maxHeight: '500px' }}>
           {activeTab === 'existing' ? (
             /* Existing Projects Tab */
-            <div className="space-y-3">
+            <div className="space-y-3 overflow-y-auto" style={{ maxHeight: '420px' }}>
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader2 className="animate-spin mb-3" size={32} style={{ color: '#7a7875' }} />
