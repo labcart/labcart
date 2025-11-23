@@ -515,7 +515,7 @@ const useTabStore = create<TabStore>()(
           activeTabId: state.activeTabId,
           userId: state.userId,
           workspacePath: state.workspacePath,
-          botServerUrl: state.botServerUrl,
+          // Don't persist botServerUrl - fetch fresh on page load to handle tunnel URL changes
         }),
         migrate: (persistedState: any, version: number) => {
           // Ensure all tabs have proper type discriminator
