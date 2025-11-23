@@ -27,8 +27,8 @@ export default function AuthCallback() {
           return;
         }
 
-        // Success! Redirect to home
-        router.push('/');
+        // Success! Redirect to login page (shows install options when logged in)
+        router.push('/login');
       } else {
         // No tokens in hash, might be PKCE flow - check URL params
         const urlParams = new URLSearchParams(window.location.search);
@@ -44,7 +44,7 @@ export default function AuthCallback() {
             return;
           }
 
-          router.push('/');
+          router.push('/login');
         } else {
           // No code or tokens - something went wrong
           console.error('No auth code or tokens found');
