@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FolderOpen, Github, Loader2, AlertCircle, FolderGit2 } from 'lucide-react';
+import { FolderOpen, Github, Loader2, AlertCircle, FolderGit2, RefreshCw } from 'lucide-react';
 import useTabStore from '@/store/tabStore';
 import { proxyFetch } from '@/lib/proxy-client';
 
@@ -180,7 +180,7 @@ export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUr
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b" style={{ borderColor: '#e0e0e0' }}>
+        <div className="flex border-b items-center" style={{ borderColor: '#e0e0e0' }}>
           <button
             onClick={() => setActiveTab('existing')}
             className="flex-1 px-6 py-3 font-medium text-sm transition-colors"
@@ -201,6 +201,34 @@ export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUr
           >
             Clone Repository
           </button>
+
+          {/* Refresh Button */}
+          {activeTab === 'existing' && (
+            <button
+              onClick={async () => {
+                console.log('🔄 Manual refresh triggered');
+                // Refresh server URL first
+                if (onRefreshServerUrl) {
+                  await onRefreshServerUrl();
+                }
+                // Then refetch workspaces
+                await fetchAllWorkspaces(false);
+              }}
+              disabled={loading}
+              className="mr-4 p-2 rounded-lg transition-all"
+              style={{
+                color: loading ? '#d0d0d0' : '#7a7875',
+                backgroundColor: 'transparent',
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+              title="Refresh workspaces and server connection"
+            >
+              <RefreshCw
+                size={18}
+                className={loading ? 'animate-spin' : ''}
+              />
+            </button>
+          )}
         </div>
 
         {/* Error Display */}

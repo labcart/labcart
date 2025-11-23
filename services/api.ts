@@ -28,7 +28,15 @@ function getApiBaseUrl(): string {
 
   // Client-side: get from store
   const botServerUrl = useTabStore.getState().botServerUrl;
-  return botServerUrl || 'http://localhost:3010';
+  const url = botServerUrl || 'http://localhost:3010';
+
+  // Log on first call or when URL changes
+  if (!getApiBaseUrl.lastUrl || getApiBaseUrl.lastUrl !== url) {
+    console.log(`🌐 API Base URL: ${url}`);
+    getApiBaseUrl.lastUrl = url;
+  }
+
+  return url;
 }
 
 // ============================================================================
@@ -80,6 +88,9 @@ export const sessionApi = {
     const url = workspacePath
       ? `${API_BASE_URL}/sessions/${botId}/${userId}?workspace=${encodeURIComponent(workspacePath)}`
       : `${API_BASE_URL}/sessions/${botId}/${userId}`;
+    console.log(`🔍 Fetching sessions from: ${url}`);
+    console.log(`   Bot ID: ${botId.substring(0, 8)}...`);
+    console.log(`   User ID: ${userId.substring(0, 8)}...`);
     const response = await fetch(url);
     return handleResponse<SessionsResponse>(response);
   },
