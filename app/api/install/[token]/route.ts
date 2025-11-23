@@ -179,17 +179,24 @@ echo ""
 echo "🚀 Starting Cloudflare Tunnel..."
 npx pm2 delete labcart-tunnel 2>/dev/null || true
 npx pm2 start cloudflared --name labcart-tunnel -- tunnel --url http://localhost:3010 --no-autoupdate
-echo "⏳ Waiting for tunnel URL..."
-sleep 5
 
-# Extract tunnel URL from PM2 logs
-TUNNEL_URL=\$(npx pm2 logs labcart-tunnel --nostream --lines 50 2>/dev/null | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1)
+# Wait for tunnel URL with retry logic (max 30 seconds)
+echo "⏳ Waiting for tunnel URL..."
+TUNNEL_URL=""
+for i in {1..15}; do
+    sleep 2
+    TUNNEL_URL=\$(npx pm2 logs labcart-tunnel --nostream --lines 100 2>/dev/null | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1)
+    if [ -n "\$TUNNEL_URL" ]; then
+        echo "✅ Tunnel URL detected: \$TUNNEL_URL"
+        break
+    fi
+    echo "   Attempt \$i/15..."
+done
 
 if [ -z "\$TUNNEL_URL" ]; then
-    echo "⚠️  Warning: Could not detect tunnel URL. Using placeholder."
-    TUNNEL_URL="https://placeholder.trycloudflare.com"
-else
-    echo "✅ Tunnel URL: \$TUNNEL_URL"
+    echo "❌ Error: Could not detect tunnel URL after 30 seconds."
+    echo "   Please check: npx pm2 logs labcart-tunnel"
+    exit 1
 fi
 
 # Update .env with actual tunnel URL
