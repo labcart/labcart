@@ -53,12 +53,23 @@ export default function Home() {
   }, [router]);
 
   // Fetch user's bot server URL
-  const fetchBotServerUrl = async (token: string) => {
+  const fetchBotServerUrl = async (token?: string) => {
     try {
+      // Get token from session if not provided
+      let authToken = token;
+      if (!authToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.log('⚠️ No auth session, cannot fetch bot server URL');
+          return;
+        }
+        authToken = session.access_token;
+      }
+
       const { apiFetch } = await import('@/lib/api-client');
       const response = await apiFetch('/api/servers', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${authToken}`,
         },
       });
 
@@ -71,6 +82,7 @@ export default function Home() {
         if (onlineServer && onlineServer.server_url) {
           console.log(`🔧 Setting bot server URL from registration: ${onlineServer.server_url}`);
           setBotServerUrl(onlineServer.server_url);
+          return onlineServer.server_url;
         } else {
           console.log('⚠️ No online bot servers found, using localhost:3010');
         }
@@ -163,7 +175,10 @@ export default function Home() {
     <BotProvider>
       {/* Show workspace picker on first run OR when no workspace is set */}
       {(isFirstRun || !workspacePath) && (
-        <WorkspacePicker onWorkspaceSelected={handleWorkspaceSelected} />
+        <WorkspacePicker
+          onWorkspaceSelected={handleWorkspaceSelected}
+          onRefreshServerUrl={fetchBotServerUrl}
+        />
       )}
 
       <div className="flex h-screen overflow-x-auto overflow-y-hidden" style={{ backgroundColor: 'var(--background)' }}>

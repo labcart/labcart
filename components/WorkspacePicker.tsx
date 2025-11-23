@@ -6,6 +6,7 @@ import useTabStore from '@/store/tabStore';
 
 interface WorkspacePickerProps {
   onWorkspaceSelected: (path: string) => void;
+  onRefreshServerUrl?: () => Promise<string | void>;
 }
 
 interface Workspace {
@@ -25,7 +26,7 @@ interface Workspace {
  * This component works for REMOTE VPS installations. For local installations,
  * the bot server should be running on localhost.
  */
-export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePickerProps) {
+export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUrl }: WorkspacePickerProps) {
   const { userId, botServerUrl } = useTabStore();
   const [activeTab, setActiveTab] = useState<'existing' | 'clone'>('existing');
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -41,7 +42,7 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
     }
   }, [activeTab, botServerUrl]);
 
-  const fetchAllWorkspaces = async () => {
+  const fetchAllWorkspaces = async (isRetry = false) => {
     if (!botServerUrl) {
       setError('Bot server not connected');
       setLoading(false);
@@ -77,6 +78,21 @@ export default function WorkspacePicker({ onWorkspaceSelected }: WorkspacePicker
       setWorkspaces(uniqueWorkspaces);
     } catch (err: any) {
       console.error('Error fetching workspaces:', err);
+
+      // If this is a CORS/network error and we haven't retried yet, try refreshing the server URL
+      if (!isRetry && onRefreshServerUrl && (err.message.includes('CORS') || err.message.includes('fetch') || err.name === 'TypeError')) {
+        console.log('🔄 CORS/network error detected, refreshing bot server URL...');
+        try {
+          await onRefreshServerUrl();
+          // The useEffect dependency on botServerUrl will automatically trigger a refetch
+          // But we can also explicitly retry here after a short delay
+          setTimeout(() => fetchAllWorkspaces(true), 1000);
+          return;
+        } catch (refreshErr) {
+          console.error('Failed to refresh server URL:', refreshErr);
+        }
+      }
+
       setError(err.message || 'Failed to load workspaces');
     } finally {
       setLoading(false);
