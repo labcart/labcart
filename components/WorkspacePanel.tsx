@@ -183,6 +183,23 @@ export default function WorkspacePanel() {
         // Use the raw UUID string (no hashing) to match bot server USER_ID
         const userUuid = session.user.id;
 
+        // Check if user has changed (different user logged in)
+        const previousUserId = localStorage.getItem('labcart-user-id');
+        if (previousUserId && previousUserId !== userUuid) {
+          console.log(`🔄 User changed from ${previousUserId.substring(0, 8)}... to ${userUuid.substring(0, 8)}..., clearing workspace state`);
+
+          // Clear all tabs and workspace state
+          useTabStore.getState().tabs = [];
+          useTabStore.getState().activeTabId = null;
+          useWorkspaceStore.setState({ isFirstRun: true, workspacePath: '', workspaceId: null });
+
+          // Clear persisted state in Supabase
+          const { workspaceId } = useWorkspaceStore.getState();
+          if (workspaceId) {
+            useTabStore.getState().saveWorkspaceState(workspaceId);
+          }
+        }
+
         console.log(`🔐 User ID from Supabase: ${userUuid}`);
         setUserId(userUuid);
         localStorage.setItem('labcart-user-id', userUuid);
