@@ -134,6 +134,14 @@ npm install
 echo ""
 echo "🌐 Installing Cloudflare Tunnel..."
 if ! command -v cloudflared &> /dev/null; then
+    # Detect OS
+    OS=\$(uname -s)
+    if [ "\$OS" = "Darwin" ]; then
+        CF_OS="darwin"
+    else
+        CF_OS="linux"
+    fi
+
     # Detect architecture
     ARCH=\$(uname -m)
     if [ "\$ARCH" = "x86_64" ]; then
@@ -144,8 +152,8 @@ if ! command -v cloudflared &> /dev/null; then
         CF_ARCH="amd64"  # fallback
     fi
 
-    echo "   Downloading cloudflared for \$CF_ARCH..."
-    curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-\$CF_ARCH" -o cloudflared
+    echo "   Downloading cloudflared for \$CF_OS-\$CF_ARCH..."
+    curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-\$CF_OS-\$CF_ARCH" -o cloudflared
     chmod +x cloudflared
     sudo mv cloudflared /usr/local/bin/ 2>/dev/null || mv cloudflared \$HOME/.local/bin/cloudflared
     echo "✅ Cloudflared installed"
