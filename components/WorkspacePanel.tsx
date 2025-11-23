@@ -191,6 +191,7 @@ export default function WorkspacePanel() {
           // Clear all tabs and workspace state
           useTabStore.getState().tabs = [];
           useTabStore.getState().activeTabId = null;
+          useTabStore.getState().botServerUrl = 'http://localhost:3010'; // Reset to default
           useWorkspaceStore.setState({ isFirstRun: true, workspacePath: '', workspaceId: null });
 
           // Clear persisted state in Supabase
