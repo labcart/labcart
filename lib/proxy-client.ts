@@ -9,14 +9,18 @@ const PROXY_BASE_URL = 'https://ide-ws.labcart.io';
 
 /**
  * Build a proxy URL for a bot server endpoint
- * @param endpoint - Bot server endpoint path (e.g., '/discover-workspaces')
+ * @param endpoint - Bot server endpoint path (e.g., '/discover-workspaces' or '/read-file?path=...')
  * @param userId - User ID for routing
  * @returns Full proxy URL
  */
 export function buildProxyUrl(endpoint: string, userId: string): string {
   // Ensure endpoint starts with /
   const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `${PROXY_BASE_URL}/proxy${path}?userId=${encodeURIComponent(userId)}`;
+
+  // Check if endpoint already has query parameters
+  const separator = path.includes('?') ? '&' : '?';
+
+  return `${PROXY_BASE_URL}/proxy${path}${separator}userId=${encodeURIComponent(userId)}`;
 }
 
 /**
