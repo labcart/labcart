@@ -303,11 +303,11 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     }
 
     try {
-      const { apiFetch } = await import('@/lib/api-client');
-      const response = await apiFetch('/api/files/rename', {
+      const { proxyFetch } = await import('@/lib/proxy-client');
+      const response = await proxyFetch('/rename-file', userId, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPath: renamingPath, newName })
+        body: JSON.stringify({ oldPath: renamingPath, newName, workspace: workspacePath })
       });
 
       if (!response.ok) {
@@ -335,11 +335,11 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
         setConfirmDialog(null);
 
         try {
-          const { apiFetch } = await import('@/lib/api-client');
-          const response = await apiFetch('/api/files/delete', {
+          const { proxyFetch } = await import('@/lib/proxy-client');
+          const response = await proxyFetch('/delete-file', userId, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filePath: path })
+            body: JSON.stringify({ filePath: path, workspace: workspacePath })
           });
 
           if (!response.ok) {
@@ -373,13 +373,13 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
         let successCount = 0;
         let errorCount = 0;
 
-        const { apiFetch } = await import('@/lib/api-client');
+        const { proxyFetch } = await import('@/lib/proxy-client');
         for (const path of selectedFiles) {
           try {
-            const response = await apiFetch('/api/files/delete', {
+            const response = await proxyFetch('/delete-file', userId, {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ filePath: path })
+              body: JSON.stringify({ filePath: path, workspace: workspacePath })
             });
 
             if (response.ok) {
@@ -411,11 +411,11 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     if (!name?.trim()) return;
 
     try {
-      const { apiFetch } = await import('@/lib/api-client');
-      const response = await apiFetch('/api/files/create', {
+      const { proxyFetch } = await import('@/lib/proxy-client');
+      const response = await proxyFetch('/create-file', userId, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentPath, name: name.trim(), type })
+        body: JSON.stringify({ parentPath, name: name.trim(), type: type === 'folder' ? 'directory' : 'file', workspace: workspacePath })
       });
 
       if (!response.ok) {

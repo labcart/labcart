@@ -330,13 +330,17 @@ export default function WorkspacePanel() {
   const saveFile = async (filePath: string, content: string) => {
     setSavingFile(true);
     try {
-      const { apiFetch } = await import('@/lib/api-client');
-      const response = await apiFetch('/api/files/save', {
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
+      const { proxyFetch } = await import('@/lib/proxy-client');
+      const response = await proxyFetch('/write-file', userId, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ filePath, content }),
+        body: JSON.stringify({ filePath, content, workspace: workspacePath }),
       });
 
       if (!response.ok) {
