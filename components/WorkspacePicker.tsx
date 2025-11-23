@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FolderOpen, Github, Loader2, AlertCircle, FolderGit2 } from 'lucide-react';
 import useTabStore from '@/store/tabStore';
+import { proxyFetch } from '@/lib/proxy-client';
 
 interface WorkspacePickerProps {
   onWorkspaceSelected: (path: string) => void;
@@ -43,8 +44,8 @@ export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUr
   }, [activeTab, botServerUrl]);
 
   const fetchAllWorkspaces = async (isRetry = false) => {
-    if (!botServerUrl) {
-      setError('Bot server not connected');
+    if (!userId) {
+      setError('User not authenticated');
       setLoading(false);
       return;
     }
@@ -54,9 +55,10 @@ export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUr
 
     try {
       // Fetch both discovered workspaces and labcart-projects in parallel
+      // Route through stable proxy instead of directly to bot server
       const [discoveredRes, labcartRes] = await Promise.all([
-        fetch(`${botServerUrl}/discover-workspaces`),
-        fetch(`${botServerUrl}/list-workspaces`)
+        proxyFetch('/discover-workspaces', userId),
+        proxyFetch('/list-workspaces', userId)
       ]);
 
       const discovered = discoveredRes.ok ? (await discoveredRes.json()).workspaces || [] : [];
@@ -112,8 +114,8 @@ export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUr
       return;
     }
 
-    if (!botServerUrl) {
-      setError('Bot server not connected');
+    if (!userId) {
+      setError('User not authenticated');
       return;
     }
 
@@ -121,7 +123,7 @@ export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUr
     setError('');
 
     try {
-      const response = await fetch(`${botServerUrl}/clone-repo`, {
+      const response = await proxyFetch('/clone-repo', userId, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoUrl: repoUrl.trim() }),

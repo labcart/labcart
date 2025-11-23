@@ -17,6 +17,7 @@ import Editor from '@monaco-editor/react';
 import type { Message, ChatTab, FileTab } from '@/types';
 import { getActiveTheme } from '@/config/themes';
 import { supabase } from '@/lib/supabase';
+import { proxyFetch } from '@/lib/proxy-client';
 
 export default function WorkspacePanel() {
   // Get active theme
@@ -294,13 +295,13 @@ export default function WorkspacePanel() {
   const loadFile = async (filePath: string) => {
     setLoadingFile(true);
     try {
-      const botServerUrl = useTabStore.getState().botServerUrl;
-      if (!botServerUrl) {
-        throw new Error('Bot server not connected');
+      if (!userId) {
+        throw new Error('User not authenticated');
       }
 
-      const response = await fetch(
-        `${botServerUrl}/read-file?path=${encodeURIComponent(filePath)}&workspace=${encodeURIComponent(workspacePath)}`
+      const response = await proxyFetch(
+        `/read-file?path=${encodeURIComponent(filePath)}&workspace=${encodeURIComponent(workspacePath)}`,
+        userId
       );
       const data = await response.json();
       setFileContent(data.content);
