@@ -294,8 +294,14 @@ export default function WorkspacePanel() {
   const loadFile = async (filePath: string) => {
     setLoadingFile(true);
     try {
-      const { apiFetch } = await import('@/lib/api-client');
-      const response = await apiFetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+      const botServerUrl = useTabStore.getState().botServerUrl;
+      if (!botServerUrl) {
+        throw new Error('Bot server not connected');
+      }
+
+      const response = await fetch(
+        `${botServerUrl}/read-file?path=${encodeURIComponent(filePath)}&workspace=${encodeURIComponent(workspacePath)}`
+      );
       const data = await response.json();
       setFileContent(data.content);
 
