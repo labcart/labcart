@@ -133,7 +133,8 @@ npm install
 # Install Cloudflare Tunnel
 echo ""
 echo "🌐 Installing Cloudflare Tunnel..."
-if ! command -v cloudflared &> /dev/null; then
+# Check if cloudflared exists AND works (not just exists)
+if ! cloudflared --version &> /dev/null; then
     # Detect OS
     OS=\$(uname -s)
     if [ "\$OS" = "Darwin" ]; then
