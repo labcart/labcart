@@ -996,8 +996,8 @@ export default function WorkspacePanel() {
 
                   // Scrolling behavior
                   smoothScrolling: true,
-                  cursorBlinking: 'smooth',
-                  cursorSmoothCaretAnimation: 'on',
+                  cursorBlinking: 'blink',
+                  cursorSmoothCaretAnimation: 'off',
 
                   // Bracket matching
                   matchBrackets: 'always',
