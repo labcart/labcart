@@ -207,12 +207,18 @@ export default function WorkspacePicker({ onWorkspaceSelected, onRefreshServerUr
             <button
               onClick={async () => {
                 console.log('🔄 Manual refresh triggered');
+                console.log(`   Current bot server URL: ${botServerUrl}`);
+
                 // Refresh server URL first
                 if (onRefreshServerUrl) {
-                  await onRefreshServerUrl();
+                  const newUrl = await onRefreshServerUrl();
+                  console.log(`   New bot server URL: ${newUrl || botServerUrl}`);
                 }
+
                 // Then refetch workspaces
+                console.log('   Refreshing workspaces...');
                 await fetchAllWorkspaces(false);
+                console.log('✅ Refresh complete');
               }}
               disabled={loading}
               className="mr-4 p-2 rounded-lg transition-all"
