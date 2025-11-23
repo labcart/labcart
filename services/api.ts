@@ -28,15 +28,7 @@ function getApiBaseUrl(): string {
 
   // Client-side: get from store
   const botServerUrl = useTabStore.getState().botServerUrl;
-  const url = botServerUrl || 'http://localhost:3010';
-
-  // Log on first call or when URL changes
-  if (!getApiBaseUrl.lastUrl || getApiBaseUrl.lastUrl !== url) {
-    console.log(`🌐 API Base URL: ${url}`);
-    getApiBaseUrl.lastUrl = url;
-  }
-
-  return url;
+  return botServerUrl || 'http://localhost:3010';
 }
 
 // ============================================================================
