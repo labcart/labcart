@@ -5,61 +5,64 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
- * GET /api/bots
- * Get all bots/agents for a user
- * Uses unified schema: marketplace_agents (templates) + my_agents (user instances)
- * Returns agents in a format compatible with the bot server
+ * GET /api/agents
+ * Get agent profiles and user's agent instances
+ *
+ * Query params:
+ * - userId: Get user's agent instances + public marketplace agents
+ * - catalogOnly: Get only marketplace agent profiles (catalog)
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
-    const platformOnly = searchParams.get('platformOnly') === 'true';
+    const catalogOnly = searchParams.get('catalogOnly') === 'true';
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (platformOnly) {
-      // Get only marketplace agents (templates)
+    if (catalogOnly) {
+      // Get marketplace agent profiles (catalog)
       const { data, error } = await supabase
         .from('marketplace_agents')
         .select('*')
         .eq('is_active', true)
-        .eq('is_public', true)
+        .eq('visibility', 'public')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching marketplace agents:', error);
+        console.error('Error fetching agent profiles:', error);
         return NextResponse.json(
-          { error: 'Failed to fetch bots', details: error.message },
+          { error: 'Failed to fetch agents', details: error.message },
           { status: 500 }
         );
       }
 
-      // Transform to bot format for compatibility
-      const bots = (data || []).map(agent => ({
+      const agents = (data || []).map(agent => ({
         id: agent.id,
+        slug: agent.slug,
         name: agent.name,
-        description: agent.description,
-        system_prompt: agent.brain_config,
-        active: agent.is_active,
-        is_platform_bot: true,
-        is_public: agent.is_public,
-        web_only: true,
+        description: agent.short_description || agent.long_description,
+        brain_config: agent.brain_config,
+        agent_type: agent.agent_type,
+        icon_emoji: agent.icon_emoji,
+        capabilities: agent.capabilities,
+        is_active: agent.is_active,
+        visibility: agent.visibility,
         created_at: agent.created_at,
       }));
 
-      return NextResponse.json({ bots });
+      return NextResponse.json({ agents });
     }
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'userId or platformOnly parameter is required' },
+        { error: 'userId or catalogOnly parameter is required' },
         { status: 400 }
       );
     }
 
     // Get user's agent instances joined with marketplace_agents
-    const { data: userAgents, error: userError } = await supabase
+    const { data: userInstances, error: userError } = await supabase
       .from('my_agents')
       .select(`
         id,
@@ -70,7 +73,7 @@ export async function GET(request: NextRequest) {
           id,
           name,
           slug,
-          description,
+          short_description,
           brain_config,
           agent_type,
           icon_emoji,
@@ -80,68 +83,69 @@ export async function GET(request: NextRequest) {
       .eq('user_id', userId);
 
     if (userError) {
-      console.error('Error fetching user agents:', userError);
+      console.error('Error fetching user agent instances:', userError);
       return NextResponse.json(
-        { error: 'Failed to fetch bots', details: userError.message },
+        { error: 'Failed to fetch agents', details: userError.message },
         { status: 500 }
       );
     }
 
-    // Also get public marketplace agents the user hasn't installed yet
-    const { data: publicAgents, error: publicError } = await supabase
+    // Also get public marketplace agents
+    const { data: catalogAgents, error: catalogError } = await supabase
       .from('marketplace_agents')
       .select('*')
       .eq('is_active', true)
-      .eq('is_public', true);
+      .eq('visibility', 'public');
 
-    if (publicError) {
-      console.error('Error fetching public agents:', publicError);
+    if (catalogError) {
+      console.error('Error fetching catalog agents:', catalogError);
     }
 
-    // Transform user agents to bot format
-    const userBots = (userAgents || []).map(ua => {
-      const agent = ua.agent as any;
+    // Transform user agent instances
+    const instances = (userInstances || []).map(ua => {
+      const profile = ua.agent as any;
       return {
-        id: ua.id, // Use my_agents id for user's instance
-        agent_id: agent?.id, // Reference to marketplace_agents
-        name: agent?.name || ua.instance_slug,
-        description: agent?.description,
-        system_prompt: {
-          ...agent?.brain_config,
+        id: ua.id,
+        profile_id: profile?.id,
+        instance_slug: ua.instance_slug,
+        name: profile?.name || ua.instance_slug,
+        description: profile?.short_description,
+        brain_config: {
+          ...profile?.brain_config,
           ...(ua.config_overrides || {}),
         },
-        active: agent?.is_active ?? true,
-        is_platform_bot: false,
-        is_public: false,
-        web_only: true,
+        agent_type: profile?.agent_type,
+        icon_emoji: profile?.icon_emoji,
+        is_active: profile?.is_active ?? true,
         user_id: userId,
         created_at: ua.created_at,
       };
     });
 
-    // Transform public agents to bot format
-    const platformBots = (publicAgents || []).map(agent => ({
+    // Transform catalog agents (profiles)
+    const profiles = (catalogAgents || []).map(agent => ({
       id: agent.id,
+      slug: agent.slug,
       name: agent.name,
-      description: agent.description,
-      system_prompt: agent.brain_config,
-      active: agent.is_active,
-      is_platform_bot: true,
-      is_public: agent.is_public,
-      web_only: true,
+      description: agent.short_description || agent.long_description,
+      brain_config: agent.brain_config,
+      agent_type: agent.agent_type,
+      icon_emoji: agent.icon_emoji,
+      is_active: agent.is_active,
+      visibility: agent.visibility,
       created_at: agent.created_at,
     }));
 
-    // Combine: user's instances first, then platform bots
-    const bots = [...userBots, ...platformBots];
-
-    return NextResponse.json({ bots });
+    return NextResponse.json({
+      instances,  // User's agent instances
+      profiles,   // Available agent profiles (catalog)
+    });
 
   } catch (error) {
-    console.error('Error in GET /api/bots:', error);
+    console.error('Error in GET /api/agents:', error);
     return NextResponse.json(
       {
-        error: 'Failed to fetch bots',
+        error: 'Failed to fetch agents',
         message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
@@ -150,17 +154,16 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/bots
- * Create a new agent instance by "installing" a marketplace agent
- * Creates entry in my_agents table
+ * POST /api/agents
+ * Create a new agent instance from a marketplace profile
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
       userId,
-      agentId, // marketplace_agents.id
-      instanceSlug, // optional custom slug for this instance
+      profileId,      // marketplace_agents.id
+      instanceSlug,   // optional custom slug
       configOverrides, // optional config customizations
     } = body;
 
@@ -171,25 +174,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!agentId) {
+    if (!profileId) {
       return NextResponse.json(
-        { error: 'agentId is required (marketplace agent to install)' },
+        { error: 'profileId is required (marketplace agent profile to instantiate)' },
         { status: 400 }
       );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify the marketplace agent exists
-    const { data: agent, error: fetchError } = await supabase
+    // Verify the profile exists
+    const { data: profile, error: fetchError } = await supabase
       .from('marketplace_agents')
       .select('id, slug, name')
-      .eq('id', agentId)
+      .eq('id', profileId)
       .single();
 
-    if (fetchError || !agent) {
+    if (fetchError || !profile) {
       return NextResponse.json(
-        { error: 'Marketplace agent not found' },
+        { error: 'Agent profile not found' },
         { status: 404 }
       );
     }
@@ -199,8 +202,8 @@ export async function POST(request: NextRequest) {
       .from('my_agents')
       .insert({
         user_id: userId,
-        agent_id: agentId,
-        instance_slug: instanceSlug || agent.slug,
+        agent_id: profileId,
+        instance_slug: instanceSlug || profile.slug,
         config_overrides: configOverrides || {},
       })
       .select()
@@ -214,14 +217,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`✅ Agent instance created: ${data.id} for user ${userId}`);
+    console.log(`Agent instance created: ${data.id} for user ${userId}`);
 
     return NextResponse.json({
       success: true,
-      bot: {
+      instance: {
         id: data.id,
-        agent_id: agentId,
-        name: agent.name,
+        profile_id: profileId,
+        name: profile.name,
         instance_slug: data.instance_slug,
         user_id: userId,
         created_at: data.created_at,
@@ -229,7 +232,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error in POST /api/bots:', error);
+    console.error('Error in POST /api/agents:', error);
     return NextResponse.json(
       {
         error: 'Failed to create agent instance',
@@ -241,14 +244,14 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * PUT /api/bots
- * Update a user's agent instance (config_overrides only)
+ * PUT /api/agents
+ * Update a user's agent instance
  */
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      id, // my_agents.id
+      id,
       instanceSlug,
       configOverrides,
     } = body;
@@ -262,7 +265,6 @@ export async function PUT(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Build update object with only provided fields
     const updates: any = { updated_at: new Date().toISOString() };
     if (instanceSlug !== undefined) updates.instance_slug = instanceSlug;
     if (configOverrides !== undefined) updates.config_overrides = configOverrides;
@@ -282,15 +284,15 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    console.log(`✅ Agent instance updated: ${id}`);
+    console.log(`Agent instance updated: ${id}`);
 
     return NextResponse.json({
       success: true,
-      bot: data,
+      instance: data,
     });
 
   } catch (error) {
-    console.error('Error in PUT /api/bots:', error);
+    console.error('Error in PUT /api/agents:', error);
     return NextResponse.json(
       {
         error: 'Failed to update agent instance',
@@ -302,7 +304,7 @@ export async function PUT(request: NextRequest) {
 }
 
 /**
- * DELETE /api/bots
+ * DELETE /api/agents
  * Delete a user's agent instance
  */
 export async function DELETE(request: NextRequest) {
@@ -332,14 +334,12 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    console.log(`✅ Agent instance deleted: ${id}`);
+    console.log(`Agent instance deleted: ${id}`);
 
-    return NextResponse.json({
-      success: true,
-    });
+    return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('Error in DELETE /api/bots:', error);
+    console.error('Error in DELETE /api/agents:', error);
     return NextResponse.json(
       {
         error: 'Failed to delete agent instance',
