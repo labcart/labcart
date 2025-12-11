@@ -56,11 +56,20 @@ export function BotProvider({ children }: { children: ReactNode }) {
           `)
           .eq('user_id', user.id);
 
-        let data = userAgents;
-        let error = userError;
+        if (userError) throw userError;
 
-        // If no user instances, fall back to marketplace catalog
-        if (!userAgents || userAgents.length === 0) {
+        let bots: Bot[] = [];
+
+        if (userAgents && userAgents.length > 0) {
+          // User has agent instances - use those
+          bots = userAgents.map((item: any) => ({
+            id: item.id,
+            name: item.agent?.name || 'Unknown',
+            displayName: item.agent?.name || 'Unknown',
+            avatar: item.agent?.name === 'Claude' ? '/claude-seeklogo.svg' : undefined
+          }));
+        } else {
+          // No user instances - fall back to marketplace catalog
           const { data: catalogAgents, error: catalogError } = await supabase
             .from('marketplace_agents')
             .select('id, name, icon_emoji, is_active')
@@ -68,27 +77,20 @@ export function BotProvider({ children }: { children: ReactNode }) {
             .eq('visibility', 'public')
             .order('created_at', { ascending: true });
 
-          data = catalogAgents;
-          error = catalogError;
-        }
+          if (catalogError) throw catalogError;
 
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          const bots: Bot[] = data.map((item: any) => {
-            // Handle both user instances (with nested agent) and catalog agents
-            const agent = item.agent || item;
-            return {
-              id: item.id,
+          if (catalogAgents && catalogAgents.length > 0) {
+            bots = catalogAgents.map((agent: any) => ({
+              id: agent.id,
               name: agent.name,
               displayName: agent.name,
               avatar: agent.name === 'Claude' ? '/claude-seeklogo.svg' : undefined
-            };
-          });
+            }));
+          }
+        }
 
+        if (bots.length > 0) {
           setAvailableBots(bots);
-
-          // Set first bot as default
           setCurrentBotState(bots[0]);
         } else {
           console.log('No bots found for user, using fallback');
