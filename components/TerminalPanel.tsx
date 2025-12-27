@@ -17,16 +17,32 @@ interface TerminalPanelProps {
 }
 
 export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps) {
-  const [terminals, setTerminals] = useState<Terminal[]>([
-    { id: 'terminal-1', name: 'bash', cwd: defaultCwd || '/' }
-  ]);
-  const [activeTerminalId, setActiveTerminalId] = useState('terminal-1');
+  // Don't initialize terminals until we have a valid workspace path
+  const validCwd = defaultCwd && defaultCwd.trim() !== '';
+
+  const [terminals, setTerminals] = useState<Terminal[]>(() => {
+    // Only create initial terminal if we have a valid workspace path
+    if (validCwd) {
+      return [{ id: 'terminal-1', name: 'bash', cwd: defaultCwd }];
+    }
+    return [];
+  });
+  const [activeTerminalId, setActiveTerminalId] = useState(() => validCwd ? 'terminal-1' : '');
   const [editingTerminalId, setEditingTerminalId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
   // Detect platform for keyboard shortcut display
   const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const closeShortcut = isMac ? '⌘W' : 'Ctrl+W';
+
+  // Create initial terminal when workspace becomes available
+  useEffect(() => {
+    if (validCwd && terminals.length === 0) {
+      console.log('📂 Workspace path available, creating initial terminal');
+      setTerminals([{ id: 'terminal-1', name: 'bash', cwd: defaultCwd }]);
+      setActiveTerminalId('terminal-1');
+    }
+  }, [validCwd, defaultCwd]);
 
   // Keyboard shortcuts for terminal
   useEffect(() => {
@@ -54,12 +70,17 @@ export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps
 
   // Handle new terminal
   const handleNewTerminal = () => {
+    if (!validCwd) {
+      console.warn('⚠️ Cannot create terminal: no workspace path set');
+      return;
+    }
+
     const newId = `terminal-${Date.now()}`;
 
     setTerminals([...terminals, {
       id: newId,
       name: 'bash',
-      cwd: defaultCwd || '/'
+      cwd: defaultCwd
     }]);
     setActiveTerminalId(newId);
   };
@@ -206,15 +227,24 @@ export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps
 
       {/* Terminal Content - Each terminal is a separate component */}
       <div className="flex-1 overflow-hidden" style={{ position: 'relative' }}>
-        {terminals.map(term => (
-          <TerminalInstance
-            key={term.id}
-            terminalId={term.id}
-            socket={socket}
-            cwd={term.cwd}
-            isActive={term.id === activeTerminalId}
-          />
-        ))}
+        {terminals.length === 0 ? (
+          <div className="h-full flex items-center justify-center" style={{ color: 'var(--text)', opacity: 0.5 }}>
+            <div className="text-sm text-center">
+              <div>No workspace selected</div>
+              <div className="text-xs mt-1">Select a workspace to enable terminal</div>
+            </div>
+          </div>
+        ) : (
+          terminals.map(term => (
+            <TerminalInstance
+              key={term.id}
+              terminalId={term.id}
+              socket={socket}
+              cwd={term.cwd}
+              isActive={term.id === activeTerminalId}
+            />
+          ))
+        )}
       </div>
     </div>
   );
