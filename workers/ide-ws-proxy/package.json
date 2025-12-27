@@ -1,0 +1,19 @@
+{
+  "name": "ide-ws-proxy",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "WebSocket proxy for LabCart IDE",
+  "devDependencies": {
+    "wrangler": "^4.50.0"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1"
+  }
+}
