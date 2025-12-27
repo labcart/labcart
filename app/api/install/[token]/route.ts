@@ -171,62 +171,24 @@ else
     echo "✅ Cloudflared already installed"
 fi
 
-# Stop existing bot server FIRST to prevent stale heartbeats during install
-echo "🛑 Stopping existing bot server (if running)..."
+# Stop existing bot server and tunnel to prevent stale processes during install
+echo "🛑 Stopping existing processes (if running)..."
 npx pm2 delete labcart-bot 2>/dev/null || true
-
-# Create temporary .env with placeholder
-cat > .env << EOF
-# Auto-configured by LabCart Install
-USER_ID=${userId}
-SERVER_ID=${serverIdValue}
-SERVER_URL=https://placeholder.trycloudflare.com
-COORDINATION_URL=${coordinationUrl}/api/servers/register
-HTTP_PORT=3010
-NEXT_PUBLIC_SUPABASE_URL=https://maaotshzykjncoifrbmj.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hYW90c2h6eWtqbmNvaWZyYm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyMDM1OTUsImV4cCI6MjA3Nzc3OTU5NX0.gtv5duMO1_eRsDkuzrMIWqSira1CnnImQagGTEXepVs
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hYW90c2h6eWtqbmNvaWZyYm1qIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjIwMzU5NSwiZXhwIjoyMDc3Nzc5NTk1fQ.AHec7PwTI21iaiHVG2pBAfXWUwbocvlM4aok-AxKzF0
-EOF
-
-# Start Cloudflare Tunnel with PM2
-echo ""
-echo "🚀 Starting Cloudflare Tunnel..."
 npx pm2 delete labcart-tunnel 2>/dev/null || true
 
-# Clear old tunnel logs to avoid URL confusion
-rm -f \$HOME/.pm2/logs/labcart-tunnel-*.log 2>/dev/null || true
-
-npx pm2 start cloudflared --name labcart-tunnel --interpreter none -- tunnel --url http://localhost:3010 --no-autoupdate
-
-# Wait for tunnel URL with retry logic (max 30 seconds)
-echo "⏳ Waiting for tunnel URL..."
-TUNNEL_URL=""
-for i in {1..15}; do
-    sleep 2
-    TUNNEL_URL=\$(npx pm2 logs labcart-tunnel --nostream --lines 100 2>/dev/null | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1)
-    if [ -n "\$TUNNEL_URL" ]; then
-        echo "✅ Tunnel URL detected: \$TUNNEL_URL"
-        break
-    fi
-    echo "   Attempt \$i/15..."
-done
-
-if [ -z "\$TUNNEL_URL" ]; then
-    echo "❌ Error: Could not detect tunnel URL after 30 seconds."
-    echo "   Please check: npx pm2 logs labcart-tunnel"
-    exit 1
-fi
-
-# Update .env with actual tunnel URL
+# Create .env configuration
+# NOTE: SERVER_URL is NOT included - the bot server now dynamically detects
+# its tunnel URL using the built-in TunnelManager. This prevents stale URL issues
+# when cloudflared restarts and generates a new URL.
 cat > .env << EOF
 # Auto-configured by LabCart Install
+# NOTE: Tunnel URL is detected dynamically by TunnelManager - no SERVER_URL needed
 USER_ID=${userId}
 SERVER_ID=${serverIdValue}
-SERVER_URL=\$TUNNEL_URL
 COORDINATION_URL=${coordinationUrl}/api/servers/register
 HTTP_PORT=3010
 NEXT_PUBLIC_SUPABASE_URL=https://maaotshzykjncoifrbmj.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hYW90c2h6eWtqbmNvaWZyYm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyMDM1OTUsImV4cCI6MjA3Nzc3OTU5NX0.gtv5duMO1_eRsDkuzrMIWqSira1CnnImQagGTEXepVs
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hYW90c2h6eWtqbmNvaWZyYm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyMDM1OTUsImV4cCI6MjA3Nzc5NTk1fQ.gtv5duMO1_eRsDkuzrMIWqSira1CnnImQagGTEXepVs
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hYW90c2h6eWtqbmNvaWZyYm1qIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjIwMzU5NSwiZXhwIjoyMDc3Nzc5NTk1fQ.AHec7PwTI21iaiHVG2pBAfXWUwbocvlM4aok-AxKzF0
 EOF
 
@@ -340,7 +302,8 @@ else
   echo "✅ Chat Context service already running (shared)"
 fi
 
-# Start the server with PM2 (already stopped at the beginning of install)
+# Start the bot server with PM2
+# The bot server now manages its own Cloudflare tunnel internally
 echo ""
 echo "🚀 Starting bot server with PM2..."
 mkdir -p logs
@@ -353,14 +316,13 @@ echo ""
 echo "✅ Installation complete!"
 echo ""
 echo "🎉 Bot server is running!"
-echo "🌐 Tunnel URL: \$TUNNEL_URL"
+echo "🚇 Cloudflare tunnel is managed automatically by the bot server"
+echo "   (URL is detected dynamically and registered to the panel)"
 echo ""
 echo "📋 Management commands:"
 echo "   npx pm2 status                   # View all services"
-echo "   npx pm2 logs labcart-bot         # View bot logs"
-echo "   npx pm2 logs labcart-tunnel      # View tunnel logs"
-echo "   npx pm2 restart labcart-bot      # Restart bot server"
-echo "   npx pm2 restart labcart-tunnel   # Restart tunnel"
+echo "   npx pm2 logs labcart-bot         # View bot logs (includes tunnel output)"
+echo "   npx pm2 restart labcart-bot      # Restart bot server and tunnel"
 echo "   npx pm2 stop labcart-bot         # Stop bot server"
 echo "   npx pm2 delete labcart-bot       # Remove bot from PM2"
 echo ""
