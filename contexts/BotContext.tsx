@@ -63,7 +63,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
         if (userAgents && userAgents.length > 0) {
           // User has agent instances - use those
           bots = userAgents.map((item: any) => ({
-            id: item.id,
+            id: item.instance_slug,
             name: item.agent?.name || 'Unknown',
             displayName: item.agent?.name || 'Unknown',
             avatar: item.agent?.name === 'Claude' ? '/claude-seeklogo.svg' : undefined
