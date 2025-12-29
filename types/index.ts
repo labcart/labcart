@@ -21,6 +21,7 @@ export interface Message {
   sender: 'user' | 'bot';
   timestamp: number;
   role?: 'user' | 'assistant'; // For Claude API format
+  status?: 'sending' | 'sent' | 'failed' | 'streaming'; // Message delivery status
 }
 
 export interface Session {
