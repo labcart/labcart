@@ -114,15 +114,15 @@ echo "📦 Installing to: \$INSTALL_DIR"
 echo ""
 
 # Clone or update the bot server repository
-if [ -d "claude-bot/.git" ]; then
+if [ -d "labcart-bot/.git" ]; then
     echo "📥 Updating existing installation..."
-    cd claude-bot
+    cd labcart-bot
     git pull
 else
     echo "📥 Cloning bot server..."
-    rm -rf claude-bot
-    git clone https://github.com/labcart/claude-bot.git
-    cd claude-bot
+    rm -rf labcart-bot
+    git clone https://github.com/labcart/labcart-bot.git
+    cd labcart-bot
 fi
 
 # Install dependencies
@@ -231,6 +231,8 @@ echo ""
 # Create .env file with stable public URL
 cat > .env << EOF
 # Auto-configured by LabCart Install (Named Tunnel)
+# Use external named tunnel (managed by PM2) instead of internal quick tunnel
+SKIP_TUNNEL_MANAGER=true
 USER_ID=${userId}
 SERVER_ID=${serverIdValue}
 SERVER_URL=\$PUBLIC_URL
@@ -306,7 +308,7 @@ if [ ! -d "\$HOME/mcp-router" ]; then
   cp -r mcp-router "\$HOME/mcp-router"
   cd "\$HOME/mcp-router"
   npm install
-  cd "\$INSTALL_DIR/claude-bot"
+  cd "\$INSTALL_DIR/labcart-bot"
   echo "✅ MCP Router installed globally"
 else
   echo "✅ MCP Router already installed at ~/mcp-router (shared)"
@@ -316,6 +318,9 @@ fi
 cd services/tts-http-service && npm install && cd ../..
 cd services/image-gen-http-service && npm install && cd ../..
 cd services/chat-context-http-service && npm install && cd ../..
+cd services/live-data-http-service && npm install && cd ../..
+cd services/transcribe && npm install && cd ../..
+cd services/video-gen && npm install && cd ../..
 
 # Start services if not already running (shared across installations)
 if ! curl -s http://localhost:3001/health > /dev/null 2>&1; then
@@ -339,14 +344,36 @@ else
   echo "✅ Chat Context service already running (shared)"
 fi
 
-# Stop any existing PM2 processes
+if ! curl -s http://localhost:3004/health > /dev/null 2>&1; then
+  echo "🚀 Starting Live Data service..."
+  npx pm2 start index.js --name live-data-service --cwd services/live-data-http-service
+else
+  echo "✅ Live Data service already running (shared)"
+fi
+
+if ! curl -s http://localhost:3005/health > /dev/null 2>&1; then
+  echo "🚀 Starting Transcribe service..."
+  npx pm2 start index.js --name transcribe-service --cwd services/transcribe
+else
+  echo "✅ Transcribe service already running (shared)"
+fi
+
+if ! curl -s http://localhost:3007/health > /dev/null 2>&1; then
+  echo "🚀 Starting Video Gen service..."
+  npx pm2 start index.js --name video-gen-service --cwd services/video-gen
+else
+  echo "✅ Video Gen service already running (shared)"
+fi
+
+# Stop any existing tunnel/bot PM2 processes (prevent duplicates)
+# Note: HTTP services (tts, image, chat) are shared and stay running
 npx pm2 delete labcart-tunnel 2>/dev/null || true
 npx pm2 delete labcart-bot 2>/dev/null || true
 
 # Start named tunnel with PM2
 echo ""
 echo "🚀 Starting named tunnel with PM2..."
-npx pm2 start cloudflared --name labcart-tunnel --interpreter none -- tunnel run \$TUNNEL_NAME
+npx pm2 start cloudflared --name labcart-tunnel --interpreter none -- tunnel run
 
 # Wait for tunnel to be fully ready
 echo "⏳ Waiting for tunnel to connect..."

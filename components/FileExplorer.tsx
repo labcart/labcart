@@ -33,36 +33,78 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
   const [renameValue, setRenameValue] = useState('');
   const [originalRenameValue, setOriginalRenameValue] = useState(''); // Track original name
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const createInputRef = useRef<HTMLInputElement>(null);
   const explorerRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [clipboard, setClipboard] = useState<{ paths: string[]; operation: 'cut' | 'copy' } | null>(null);
+  const [creatingIn, setCreatingIn] = useState<{ parentPath: string; type: 'file' | 'folder' } | null>(null);
+  const [createValue, setCreateValue] = useState('');
 
   useEffect(() => {
     if (!workspacePath || !userId) return;
 
     loadDirectory(workspacePath);
 
-    // Set up file system watcher for auto-refresh (via proxy)
+    // Set up file system watcher for auto-refresh (via proxy) with reconnection
     const proxyUrl = 'https://ide-ws.labcart.io';
-    const eventSource = new EventSource(`${proxyUrl}/proxy/files/watch?userId=${userId}&path=` + encodeURIComponent(workspacePath) + '&workspace=' + encodeURIComponent(workspacePath));
+    let eventSource: EventSource | null = null;
+    let reconnectAttempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let intentionalClose = false;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const BASE_DELAY = 1000;
+    const MAX_DELAY = 30000;
 
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    const connect = () => {
+      const watchUrl = `${proxyUrl}/proxy/files/watch?userId=${userId}&path=${encodeURIComponent(workspacePath)}&workspace=${encodeURIComponent(workspacePath)}`;
+      eventSource = new EventSource(watchUrl);
 
-      if (data.type === 'change') {
-        console.log('File system changed, refreshing...', data);
-        loadDirectory(workspacePath);
-      }
+      eventSource.onopen = () => {
+        if (reconnectAttempts > 0) {
+          console.log('📁 File watcher reconnected');
+        }
+        reconnectAttempts = 0;
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'change') {
+            console.log('File system changed, refreshing...', data);
+            loadDirectory(workspacePath);
+          }
+        } catch (error) {
+          console.error('Error parsing file watcher message:', error);
+        }
+      };
+
+      eventSource.onerror = () => {
+        if (intentionalClose) return;
+
+        eventSource?.close();
+
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+          console.error('📁 File watcher: Max reconnection attempts reached');
+          return;
+        }
+
+        const delay = Math.min(BASE_DELAY * Math.pow(2, reconnectAttempts), MAX_DELAY);
+        reconnectAttempts++;
+        console.log(`📁 File watcher disconnected, reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+
+        reconnectTimer = setTimeout(connect, delay);
+      };
     };
 
-    eventSource.onerror = (error) => {
-      console.error('File watcher error:', error);
-      eventSource.close();
-    };
+    connect();
 
     return () => {
-      eventSource.close();
+      intentionalClose = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      eventSource?.close();
     };
   }, [workspacePath, userId]);
 
@@ -133,6 +175,13 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
       }
     }
   }, [renamingPath]);
+
+  // Focus create input when creating starts
+  useEffect(() => {
+    if (creatingIn && createInputRef.current) {
+      createInputRef.current.focus();
+    }
+  }, [creatingIn]);
 
   // Don't render if no workspace selected (must be AFTER all hooks)
   if (!workspacePath) {
@@ -420,22 +469,51 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     });
   };
 
-  const handleCreateNew = async (parentPath: string, type: 'file' | 'folder') => {
-    // TODO: Replace with inline input dialog (conductor.build style)
-    const name = prompt(`Enter ${type} name:`);
-    if (!name?.trim()) return;
+  const handleCreateNew = (parentPath: string, type: 'file' | 'folder') => {
+    setContextMenu(null);
+    setCreateValue('');
+    setCreatingIn({ parentPath, type });
+
+    // Expand the parent directory so the input is visible
+    setRootFiles(prev => expandPath(prev, parentPath));
+  };
+
+  // Helper to expand a directory path in the tree
+  const expandPath = (nodes: FileNode[], targetPath: string): FileNode[] => {
+    return nodes.map(node => {
+      if (node.path === targetPath && node.isDirectory) {
+        return { ...node, isExpanded: true };
+      }
+      if (node.children) {
+        return { ...node, children: expandPath(node.children, targetPath) };
+      }
+      return node;
+    });
+  };
+
+  const handleConfirmCreate = async () => {
+    if (!creatingIn || !createValue.trim()) {
+      setCreatingIn(null);
+      setCreateValue('');
+      return;
+    }
 
     if (!userId) {
       setToast({ message: 'User not authenticated', type: 'error' });
+      setCreatingIn(null);
+      setCreateValue('');
       return;
     }
+
+    const { parentPath, type } = creatingIn;
+    const name = createValue.trim();
 
     try {
       const { proxyFetch } = await import('@/lib/proxy-client');
       const response = await proxyFetch('/create-file', userId, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentPath, name: name.trim(), type: type === 'folder' ? 'directory' : 'file', workspace: workspacePath })
+        body: JSON.stringify({ parentPath, name, type, workspace: workspacePath })
       });
 
       if (!response.ok) {
@@ -449,6 +527,9 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
     } catch (error) {
       console.error('Error creating:', error);
       setToast({ message: 'Failed to create', type: 'error' });
+    } finally {
+      setCreatingIn(null);
+      setCreateValue('');
     }
   };
 
@@ -469,8 +550,54 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
 
     setContextMenu(null);
 
-    // TODO: Implement paste API endpoint
-    setToast({ message: 'Paste functionality coming soon', type: 'info' });
+    if (!userId) {
+      setToast({ message: 'User not authenticated', type: 'error' });
+      return;
+    }
+
+    try {
+      const { proxyFetch } = await import('@/lib/proxy-client');
+      const response = await proxyFetch('/copy-file', userId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sources: clipboard.paths,
+          targetDir: targetPath,
+          operation: clipboard.operation,
+          workspace: workspacePath
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setToast({ message: data.error || 'Failed to paste', type: 'error' });
+        return;
+      }
+
+      // Clear clipboard if it was a cut operation
+      if (clipboard.operation === 'cut') {
+        setClipboard(null);
+      }
+
+      const { summary } = data;
+      if (summary.errors > 0) {
+        setToast({
+          message: `Pasted ${summary.success} of ${summary.total} items (${summary.errors} failed)`,
+          type: 'error'
+        });
+      } else {
+        setToast({
+          message: `${clipboard.operation === 'cut' ? 'Moved' : 'Copied'} ${summary.success} item${summary.success !== 1 ? 's' : ''}`,
+          type: 'success'
+        });
+      }
+
+      await loadDirectory(workspacePath);
+    } catch (error) {
+      console.error('Error pasting:', error);
+      setToast({ message: 'Failed to paste', type: 'error' });
+    }
   };
 
   const handleCopyPath = (path: string) => {
@@ -622,9 +749,46 @@ export default function FileExplorer({ onFileClick }: FileExplorerProps) {
           )}
         </div>
 
-        {node.isDirectory && node.isExpanded && node.children && (
+        {node.isDirectory && node.isExpanded && (
           <div>
-            {node.children.map(child => renderNode(child, depth + 1))}
+            {/* Inline create input */}
+            {creatingIn?.parentPath === node.path && (
+              <div
+                className="flex items-center gap-1 px-2 py-1 text-sm"
+                style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
+              >
+                <span style={{ width: '14px' }} />
+                {creatingIn.type === 'folder' ? (
+                  <Folder size={14} style={{ opacity: 0.6 }} />
+                ) : (
+                  <File size={14} style={{ opacity: 0.6 }} />
+                )}
+                <input
+                  ref={createInputRef}
+                  type="text"
+                  value={createValue}
+                  onChange={(e) => setCreateValue(e.target.value)}
+                  onBlur={handleConfirmCreate}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleConfirmCreate();
+                    } else if (e.key === 'Escape') {
+                      setCreatingIn(null);
+                      setCreateValue('');
+                    }
+                  }}
+                  placeholder={creatingIn.type === 'folder' ? 'folder name' : 'file name'}
+                  className="flex-1 px-1 py-0 text-sm outline-none rounded"
+                  style={{
+                    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            )}
+            {node.children?.map(child => renderNode(child, depth + 1))}
           </div>
         )}
       </div>

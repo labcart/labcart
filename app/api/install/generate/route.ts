@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     // Generate install command
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const installCommand = `curl -fsSL ${baseUrl}/api/install/${token} | bash`;
+    const installCommand = `curl -fsSL ${baseUrl}/api/install-named/${token} | bash`;
 
     console.log(`✅ Install token generated for user ${user.id}`);
 

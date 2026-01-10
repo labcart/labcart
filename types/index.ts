@@ -13,6 +13,7 @@ export interface Bot {
   id: string;
   name: string;
   avatar?: string;
+  instanceId?: string; // my_agents.id (row UUID) - used for deletion
 }
 
 export interface Message {
@@ -57,8 +58,15 @@ export interface FileTab {
   lastActivity: number;
 }
 
+// Marketplace Tab (for browsing/adding agents)
+export interface MarketplaceTab {
+  type: 'marketplace';
+  id: string; // Fixed ID: `marketplace-browse`
+  lastActivity: number;
+}
+
 // Unified Tab Type (discriminated union)
-export type Tab = ChatTab | FileTab;
+export type Tab = ChatTab | FileTab | MarketplaceTab;
 
 // ============================================================================
 // API Request/Response Types
@@ -136,6 +144,9 @@ export interface TabStore {
 
   // File Tab Actions
   addFileTab: (filePath: string) => void;
+
+  // Marketplace Tab Actions
+  addMarketplaceTab: () => void;
 
   // Common Actions
   setUserId: (userId: string) => void;

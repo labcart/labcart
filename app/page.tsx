@@ -183,7 +183,7 @@ export default function Home() {
         />
       )}
 
-      <div className="flex h-screen overflow-x-auto overflow-y-hidden" style={{ backgroundColor: 'var(--background)' }}>
+      <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--background)' }}>
         {showLeftSidebar && <LeftSidebar onFileOpen={handleFileOpen} onHomeClick={handleHomeClick} />}
 
         {/* Unified workspace panel handles both chat and file tabs */}

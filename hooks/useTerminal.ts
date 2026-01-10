@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import type { ISocket } from './useSocket';
 
 interface UseTerminalOptions {
@@ -17,6 +17,23 @@ export function useTerminal(options: UseTerminalOptions) {
   const fitAddonRef = useRef<any>(null);
   const createdRef = useRef(false);
   const mountedRef = useRef(false);
+  const handlersRef = useRef<{
+    output: Function | null;
+    created: Function | null;
+    reattached: Function | null;
+    exit: Function | null;
+    error: Function | null;
+    reconnect: Function | null;
+    disconnect: Function | null;
+  }>({
+    output: null,
+    created: null,
+    reattached: null,
+    exit: null,
+    error: null,
+    reconnect: null,
+    disconnect: null,
+  });
 
   useEffect(() => {
     if (!terminalRef.current || !socket) return;
@@ -32,6 +49,7 @@ export function useTerminal(options: UseTerminalOptions) {
     let term: any;
     let fitAddon: any;
     let webLinksAddon: any;
+    let cleanupFns: Array<() => void> = [];
 
     const initTerminal = async () => {
       const { Terminal } = await import('@xterm/xterm');
@@ -93,19 +111,12 @@ export function useTerminal(options: UseTerminalOptions) {
       xtermRef.current = term;
       fitAddonRef.current = fitAddon;
 
-      // Request terminal creation from backend
-      console.log(`🖥️  Requesting terminal creation: ${terminalId}`);
-      socket.emit('terminal:create', {
-        terminalId,
-        cwd: cwd, // Workspace path from parent component
-        cols: term.cols,
-        rows: term.rows,
-        botId,
-      });
+      // === SET UP HANDLERS BEFORE EMITTING terminal:create ===
+      // This fixes the race condition where early output was missed
 
       // Handle terminal output from backend
       const handleOutput = (data: { terminalId: string; data: string }) => {
-        if (data.terminalId === terminalId) {
+        if (data.terminalId === terminalId && term) {
           term.write(data.data);
         }
       };
@@ -119,26 +130,83 @@ export function useTerminal(options: UseTerminalOptions) {
         }
       };
 
+      // Handle terminal reattached confirmation (after reconnection)
+      const handleReattached = (data: { terminalId: string }) => {
+        if (data.terminalId === terminalId) {
+          console.log(`✅ Terminal ${terminalId} reattached`);
+          createdRef.current = true;
+        }
+      };
+
       // Handle terminal exit
       const handleExit = (data: { terminalId: string; exitCode: number }) => {
-        if (data.terminalId === terminalId) {
+        if (data.terminalId === terminalId && term) {
           console.log(`🖥️  Terminal ${terminalId} exited with code ${data.exitCode}`);
           term.write('\r\n\x1b[31mTerminal exited\x1b[0m\r\n');
+          createdRef.current = false;
         }
       };
 
       // Handle errors
       const handleError = (data: { terminalId: string; error: string }) => {
-        if (data.terminalId === terminalId) {
+        if (data.terminalId === terminalId && term) {
           console.error(`❌ Terminal ${terminalId} error:`, data.error);
           term.write(`\r\n\x1b[31mError: ${data.error}\x1b[0m\r\n`);
         }
       };
 
+      // Handle socket disconnection - show warning in terminal
+      const handleDisconnect = () => {
+        if (term) {
+          term.write('\r\n\x1b[33m⚠ Connection lost. Reconnecting...\x1b[0m\r\n');
+        }
+      };
+
+      // Handle socket reconnection - re-attach to terminal
+      const handleReconnect = () => {
+        if (term) {
+          term.write('\r\n\x1b[32m✓ Reconnected\x1b[0m\r\n');
+          // Re-attach to existing terminal on backend (or create if gone)
+          console.log(`🔄 Re-attaching to terminal ${terminalId}`);
+          socket.emit('terminal:reattach', {
+            terminalId,
+            cwd: cwd,
+            cols: term.cols,
+            rows: term.rows,
+            botId,
+          });
+        }
+      };
+
+      // Store handler refs for cleanup
+      handlersRef.current = {
+        output: handleOutput,
+        created: handleCreated,
+        reattached: handleReattached,
+        exit: handleExit,
+        error: handleError,
+        reconnect: handleReconnect,
+        disconnect: handleDisconnect,
+      };
+
+      // Register all handlers FIRST
       socket.on('terminal:output', handleOutput);
       socket.on('terminal:created', handleCreated);
+      socket.on('terminal:reattached', handleReattached);
       socket.on('terminal:exit', handleExit);
       socket.on('terminal:error', handleError);
+      socket.on('disconnect', handleDisconnect);
+      socket.on('reconnect', handleReconnect);
+
+      // NOW request terminal creation (handlers are ready to receive output)
+      console.log(`🖥️  Requesting terminal creation: ${terminalId}`);
+      socket.emit('terminal:create', {
+        terminalId,
+        cwd: cwd,
+        cols: term.cols,
+        rows: term.rows,
+        botId,
+      });
 
       // Send user input to backend
       term.onData((data: string) => {
@@ -147,7 +215,7 @@ export function useTerminal(options: UseTerminalOptions) {
 
       // Handle terminal resize
       const handleResize = () => {
-        if (fitAddon) {
+        if (fitAddon && term) {
           fitAddon.fit();
           socket.emit('terminal:resize', {
             terminalId,
@@ -159,31 +227,35 @@ export function useTerminal(options: UseTerminalOptions) {
 
       // Resize on window resize
       window.addEventListener('resize', handleResize);
+      cleanupFns.push(() => window.removeEventListener('resize', handleResize));
 
       // Handle page unload - kill terminals on page refresh/close
-      // This is different from React component unmount (which happens during navigation)
       const handleBeforeUnload = () => {
         if (socket && socket.connected) {
-          // Emit kill event - socket will disconnect and server will clean up
           socket.emit('terminal:kill', { terminalId });
         }
       };
 
       window.addEventListener('beforeunload', handleBeforeUnload);
-
-      // Return cleanup function
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-      };
+      cleanupFns.push(() => window.removeEventListener('beforeunload', handleBeforeUnload));
     };
 
     initTerminal();
 
-    // Cleanup - DON'T kill terminal during React unmount (it stays alive across app navigations)
-    // Terminals are only killed on actual page unload (handled by beforeunload above)
+    // Cleanup on unmount
     return () => {
-      // No-op during component unmount - terminal persists during app navigation
+      cleanupFns.forEach(fn => fn());
+
+      // Remove socket handlers
+      if (socket && handlersRef.current.output) {
+        socket.off('terminal:output', handlersRef.current.output);
+        socket.off('terminal:created', handlersRef.current.created!);
+        socket.off('terminal:reattached', handlersRef.current.reattached!);
+        socket.off('terminal:exit', handlersRef.current.exit!);
+        socket.off('terminal:error', handlersRef.current.error!);
+        socket.off('disconnect', handlersRef.current.disconnect!);
+        socket.off('reconnect', handlersRef.current.reconnect!);
+      }
     };
   }, [terminalId, socket, cwd, botId, onReady]);
 

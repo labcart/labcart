@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, RotateCw, X } from 'lucide-react';
+import { Plus, RotateCw, X, ExternalLink } from 'lucide-react';
 import type { ISocket } from '@/hooks/useSocket';
 import TerminalInstance from './TerminalInstance';
+import useTabStore from '@/store/tabStore';
 
 interface Terminal {
   id: string;
@@ -17,6 +18,9 @@ interface TerminalPanelProps {
 }
 
 export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps) {
+  // Get userId for popout
+  const userId = useTabStore((state) => state.userId);
+
   // Don't initialize terminals until we have a valid workspace path
   const validCwd = defaultCwd && defaultCwd.trim() !== '';
 
@@ -144,6 +148,26 @@ export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps
     setEditingName('');
   };
 
+  // Pop out terminal into new window
+  const handlePopout = () => {
+    if (!userId || !activeTerminalId) return;
+
+    const activeTerminal = terminals.find(t => t.id === activeTerminalId);
+    if (!activeTerminal) return;
+
+    const params = new URLSearchParams({
+      terminalId: `popout-${Date.now()}`, // New ID so it creates fresh terminal
+      cwd: activeTerminal.cwd,
+      userId: userId,
+    });
+
+    window.open(
+      `/popout/terminal?${params.toString()}`,
+      '_blank',
+      'width=800,height=500,menubar=no,toolbar=no,location=no,status=no'
+    );
+  };
+
   const showTabs = terminals.length > 1;
 
   return (
@@ -154,6 +178,13 @@ export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps
 
         {/* Action Icons */}
         <div className="flex items-center gap-1">
+          <button
+            onClick={handlePopout}
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/5 transition-colors"
+            title="Pop Out Terminal"
+          >
+            <ExternalLink size={14} style={{ color: 'var(--text)', opacity: 0.7 }} />
+          </button>
           <button
             onClick={handleNewTerminal}
             className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/5 transition-colors"

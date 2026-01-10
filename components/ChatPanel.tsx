@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, History, Plus } from 'lucide-react';
+import { MessageSquare, History, Plus, ExternalLink } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import useTabStore from '@/store/tabStore';
 import { api } from '@/services/api';
@@ -142,6 +142,24 @@ export default function ChatPanel({ tab, userId, workspacePath }: ChatPanelProps
     }
   };
 
+  // Pop out chat into new window
+  const handlePopout = () => {
+    const params = new URLSearchParams({
+      tabId: tab.id,
+      botId: tab.botId,
+      botName: tab.botName,
+      userId: userId,
+      workspacePath: workspacePath,
+      ...(tab.sessionUuid && { sessionUuid: tab.sessionUuid }),
+    });
+
+    window.open(
+      `/popout/chat?${params.toString()}`,
+      '_blank',
+      'width=500,height=700,menubar=no,toolbar=no,location=no,status=no'
+    );
+  };
+
   // Render message with status indicator
   const renderMessage = (msg: Message) => {
     const isUser = msg.sender === 'user';
@@ -189,6 +207,14 @@ export default function ChatPanel({ tab, userId, workspacePath }: ChatPanelProps
           </div>
 
           <div className="flex items-center gap-1">
+            <button
+              onClick={handlePopout}
+              className="w-7 h-7 flex items-center justify-center rounded hover:bg-black/5"
+              style={{ color: 'var(--text)' }}
+              title="Pop Out Chat"
+            >
+              <ExternalLink size={16} />
+            </button>
             <button
               onClick={handleCreateNewSession}
               className="w-7 h-7 flex items-center justify-center rounded hover:bg-black/5"

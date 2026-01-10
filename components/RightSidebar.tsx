@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Circle, Loader2, Check, Plus, Settings, MoreVertical, PanelLeft, PanelRight } from 'lucide-react';
+import { Circle, Loader2, Check, Plus, Settings, MoreVertical, PanelLeft, PanelRight, X } from 'lucide-react';
 import { useBot } from '@/contexts/BotContext';
 import useTabStore from '@/store/tabStore';
 import useWorkspaceStore from '@/store/workspaceStore';
 import { api } from '@/services/api';
+import { apiFetch } from '@/lib/api-client';
 import { useSocket } from '@/hooks/useSocket';
 import TerminalPanel from '@/components/TerminalPanel';
 
@@ -22,8 +23,8 @@ export default function RightSidebar({
   onToggleLeftSidebar,
   onToggleRightSidebar
 }: RightSidebarProps) {
-  const { currentBot, setCurrentBot, availableBots } = useBot();
-  const { addTab, updateTabMessages, userId, tabs, setActiveTab, replaceTabSession } = useTabStore();
+  const { currentBot, setCurrentBot, availableBots, refreshBots } = useBot();
+  const { addTab, updateTabMessages, userId, tabs, setActiveTab, replaceTabSession, addMarketplaceTab } = useTabStore();
   const { workspacePath } = useWorkspaceStore();
 
   // Get socket for terminal
@@ -135,6 +136,49 @@ export default function RightSidebar({
     // TODO: Open bot settings modal/page
   };
 
+  /**
+   * Delete agent from user's team
+   */
+  const handleDeleteAgent = async (bot: { id: string; name: string; instanceId?: string }, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering handleBotClick
+
+    // Can only delete if we have the instanceId (my_agents row UUID)
+    if (!bot.instanceId) {
+      console.error('Cannot delete: no instanceId available');
+      return;
+    }
+
+    // Confirm deletion
+    if (!confirm(`Remove "${bot.name}" from your team?`)) {
+      return;
+    }
+
+    try {
+      const response = await apiFetch(`/api/agents?id=${bot.instanceId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete agent');
+      }
+
+      console.log(`Deleted agent: ${bot.name}`);
+
+      // Refresh the bot list
+      await refreshBots();
+    } catch (error) {
+      console.error('Error deleting agent:', error);
+      alert('Failed to remove agent. Please try again.');
+    }
+  };
+
+  /**
+   * Open marketplace panel to add agents
+   */
+  const handleAddAgent = () => {
+    addMarketplaceTab();
+  };
 
   return (
     <div className={`h-full flex-shrink-0 flex flex-col ${showRightSidebar ? 'w-[320px]' : 'w-auto'}`}>
@@ -209,10 +253,30 @@ export default function RightSidebar({
                     >
                       <Settings size={14} style={{ color: 'var(--text)', opacity: 0.6 }} />
                     </button>
+
+                    {/* Delete Icon - only show if agent has instanceId (is owned) */}
+                    {(bot as any).instanceId && (
+                      <button
+                        onClick={(e) => handleDeleteAgent(bot as any, e)}
+                        className="w-6 h-6 flex items-center justify-center"
+                        title="Remove from Team"
+                      >
+                        <X size={14} style={{ color: 'var(--text)', opacity: 0.6 }} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
             })}
+
+            {/* Add Agent Button */}
+            <div
+              className="flex items-center gap-2 p-2 rounded hover:bg-black/5 cursor-pointer"
+              onClick={handleAddAgent}
+            >
+              <Plus size={14} style={{ color: 'var(--text)', opacity: 0.5 }} />
+              <span className="text-sm" style={{ color: 'var(--text)', opacity: 0.5 }}>Add Agent</span>
+            </div>
           </div>
         </div>
 

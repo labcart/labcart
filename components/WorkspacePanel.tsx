@@ -16,11 +16,12 @@
 import { useState, useEffect } from 'react';
 import useTabStore from '@/store/tabStore';
 import useWorkspaceStore from '@/store/workspaceStore';
-import { MessageSquare, X, File } from 'lucide-react';
-import type { ChatTab, FileTab } from '@/types';
+import { MessageSquare, X, File, Store } from 'lucide-react';
+import type { ChatTab, FileTab, MarketplaceTab } from '@/types';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from './ChatPanel';
 import FilePanel from './FilePanel';
+import MarketplacePanel from './MarketplacePanel';
 
 export default function WorkspacePanel() {
   // ========================================================================
@@ -70,9 +71,12 @@ export default function WorkspacePanel() {
         const previousUserId = localStorage.getItem('labcart-user-id');
         if (previousUserId && previousUserId !== userUuid) {
           console.log(`🔄 User changed, clearing workspace state`);
-          useTabStore.getState().tabs = [];
-          useTabStore.getState().activeTabId = null;
-          useTabStore.getState().botServerUrl = 'http://localhost:3010';
+          // Use proper setState instead of direct mutation to maintain reactivity
+          useTabStore.setState({
+            tabs: [],
+            activeTabId: null,
+            botServerUrl: 'http://localhost:3010',
+          });
           useWorkspaceStore.setState({ isFirstRun: true, workspacePath: '', workspaceId: null });
         }
 
@@ -130,17 +134,21 @@ export default function WorkspacePanel() {
   // Tab Rendering Helpers
   // ========================================================================
 
-  const renderTabIcon = (tab: ChatTab | FileTab) => {
+  const renderTabIcon = (tab: ChatTab | FileTab | MarketplaceTab) => {
     if (tab.type === 'chat') {
       return <MessageSquare size={14} style={{ color: 'var(--text)', opacity: 0.6 }} />;
+    } else if (tab.type === 'marketplace') {
+      return <Store size={14} style={{ color: 'var(--text)', opacity: 0.6 }} />;
     } else {
       return <File size={14} style={{ color: 'var(--text)', opacity: 0.6 }} />;
     }
   };
 
-  const renderTabLabel = (tab: ChatTab | FileTab) => {
+  const renderTabLabel = (tab: ChatTab | FileTab | MarketplaceTab) => {
     if (tab.type === 'chat') {
       return `${tab.botName}${tab.sessionUuid ? ` (${tab.sessionUuid.substring(0, 6)})` : ' (New)'}`;
+    } else if (tab.type === 'marketplace') {
+      return 'Add Agent';
     } else {
       return tab.fileName || 'Untitled';
     }
@@ -157,7 +165,7 @@ export default function WorkspacePanel() {
   // ========================================================================
 
   return (
-    <div className="flex-1 flex flex-col" style={{ backgroundColor: 'var(--background)', minWidth: '300px' }}>
+    <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: 'var(--background)', minWidth: '300px' }}>
       {/* Tab Bar */}
       <div
         className="flex items-center gap-1 border-b flex-shrink-0"
@@ -221,6 +229,8 @@ export default function WorkspacePanel() {
           userId={userId || ''}
           workspacePath={workspacePath}
         />
+      ) : activeTab.type === 'marketplace' ? (
+        <MarketplacePanel />
       ) : (
         <FilePanel
           tab={activeTab}

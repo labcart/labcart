@@ -7,7 +7,7 @@
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import type { TabStore, ChatTab, FileTab, Tab, Message } from '@/types';
+import type { TabStore, ChatTab, FileTab, MarketplaceTab, Tab, Message } from '@/types';
 
 const useTabStore = create<TabStore>()(
   devtools(
@@ -225,6 +225,31 @@ const useTabStore = create<TabStore>()(
           id: tabId,
           filePath,
           fileName,
+          lastActivity: Date.now(),
+        };
+
+        set((state) => ({
+          tabs: [...state.tabs, newTab],
+          activeTabId: tabId,
+        }));
+      },
+
+      /**
+       * Add or activate the marketplace tab
+       */
+      addMarketplaceTab: () => {
+        const tabId = 'marketplace-browse';
+
+        // Check if marketplace tab already exists
+        const existingTab = get().tabs.find((t) => t.id === tabId);
+        if (existingTab) {
+          set({ activeTabId: tabId });
+          return;
+        }
+
+        const newTab: MarketplaceTab = {
+          type: 'marketplace',
+          id: tabId,
           lastActivity: Date.now(),
         };
 
@@ -547,6 +572,15 @@ const useTabStore = create<TabStore>()(
                     id: tab.id,
                     filePath: tab.filePath || '',
                     fileName: fileName || 'Untitled',
+                    lastActivity: tab.lastActivity || Date.now(),
+                  };
+                }
+
+                // Marketplace tab migration
+                if (tab.type === 'marketplace') {
+                  return {
+                    type: 'marketplace',
+                    id: tab.id || 'marketplace-browse',
                     lastActivity: tab.lastActivity || Date.now(),
                   };
                 }
