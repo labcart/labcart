@@ -155,6 +155,7 @@ export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps
     const activeTerminal = terminals.find(t => t.id === activeTerminalId);
     if (!activeTerminal) return;
 
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
     const params = new URLSearchParams({
       terminalId: `popout-${Date.now()}`, // New ID so it creates fresh terminal
       cwd: activeTerminal.cwd,
@@ -162,7 +163,7 @@ export default function TerminalPanel({ socket, defaultCwd }: TerminalPanelProps
     });
 
     window.open(
-      `/popout/terminal?${params.toString()}`,
+      `${basePath}/popout/terminal?${params.toString()}`,
       '_blank',
       'width=800,height=500,menubar=no,toolbar=no,location=no,status=no'
     );

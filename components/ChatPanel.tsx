@@ -144,6 +144,7 @@ export default function ChatPanel({ tab, userId, workspacePath }: ChatPanelProps
 
   // Pop out chat into new window
   const handlePopout = () => {
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
     const params = new URLSearchParams({
       tabId: tab.id,
       botId: tab.botId,
@@ -154,7 +155,7 @@ export default function ChatPanel({ tab, userId, workspacePath }: ChatPanelProps
     });
 
     window.open(
-      `/popout/chat?${params.toString()}`,
+      `${basePath}/popout/chat?${params.toString()}`,
       '_blank',
       'width=500,height=700,menubar=no,toolbar=no,location=no,status=no'
     );
