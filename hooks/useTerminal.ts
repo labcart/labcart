@@ -1,6 +1,15 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { ISocket } from './useSocket';
 
+// Debounce helper to prevent rapid resize calls causing canvas oscillation
+const debounce = <T extends (...args: any[]) => void>(fn: T, ms: number) => {
+  let timer: ReturnType<typeof setTimeout>;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+};
+
 interface UseTerminalOptions {
   terminalId: string;
   socket: ISocket | null;
@@ -213,8 +222,8 @@ export function useTerminal(options: UseTerminalOptions) {
         socket.emit('terminal:input', { terminalId, data });
       });
 
-      // Handle terminal resize
-      const handleResize = () => {
+      // Handle terminal resize (debounced to prevent canvas oscillation)
+      const handleResize = debounce(() => {
         if (fitAddon && term) {
           fitAddon.fit();
           socket.emit('terminal:resize', {
@@ -223,7 +232,7 @@ export function useTerminal(options: UseTerminalOptions) {
             rows: term.rows,
           });
         }
-      };
+      }, 100);
 
       // Resize on window resize
       window.addEventListener('resize', handleResize);
